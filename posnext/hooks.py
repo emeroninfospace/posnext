@@ -1,32 +1,29 @@
 app_name = "posnext"
 app_title = "Posnext"
-app_publisher = "Ashkar"
-app_description = "posnext"
-app_email = "muhammed786ashkar@gmail.com"
+app_publisher = "jan"
+app_description = "POSNext"
+app_email = "jan@gmail.com"
 app_license = "mit"
-
-# Apps
-# ------------------
-
 # required_apps = []
-
-# Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "posnext",
-# 		"logo": "/assets/posnext/logo.png",
-# 		"title": "Posnext",
-# 		"route": "/posnext",
-# 		"has_permission": "posnext.api.permission.has_app_permission"
-# 	}
-# ]
 
 # Includes in <head>
 # ------------------
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/posnext/css/posnext.css"
-# app_include_js = "/assets/posnext/js/posnext.js"
+app_include_js = [
+    # "/assets/posnext/js/posnext_namespace.js",
+    # "/assets/posnext/js/pos_controller.js",
+    # "/assets/posnext/js/pos_item_cart.js",
+    # "/assets/posnext/js/pos_item_details.js",
+    # "/assets/posnext/js/pos_item_selector.js",
+    # "/assets/posnext/js/pos_number_pad.js",
+    # "/assets/posnext/js/pos_past_order_list.js",
+    # "/assets/posnext/js/pos_past_order_summary.js",
+    # "/assets/posnext/js/pos_payment.js",
+    "posnext.bundle.js",
+    "/assets/posnext/js/pos_override.js",
+]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/posnext/css/posnext.css"
@@ -43,8 +40,13 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+doctype_js = {
+    "POS Profile" : "public/js/pos_profile.js",
+	# "Sales Invoice" : "public/js/sales_invoice.js",
+    "Sales Order": "public/js/sales_order.js",
+}
+
+doctype_list_js = {"Item" : "public/js/item_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -137,13 +139,26 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Item": {
+		"validate": "posnext.doc_events.item.validate_item"
+	},
+    "Sales Order": {
+        "validate": "posnext.doc_events.sales_order.validate_so",
+        "on_submit": "posnext.doc_events.sales_order.on_submit_so"
+    },
+	# "Sales Invoice": {
+	# 	"validate": [
+	# 		"posnext.doc_events.sales_invoice.validate_si",
+	# 	],
+	# 	"on_submit": [
+	# 		"posnext.doc_events.sales_invoice.create_delivery_note",
+	# 	]
+	# },
+	"POS Profile": {
+		"validate": "posnext.doc_events.pos_profile.validate_pf"
+	}
+}
 
 # Scheduled Tasks
 # ---------------
@@ -174,9 +189,10 @@ app_license = "mit"
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "posnext.event.get_events"
-# }
+override_whitelisted_methods = {
+	"erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry.get_pos_invoices": "posnext.overrides.pos_closing_entry.get_pos_invoices",
+	"erpnext.accounts.doctype.pos_invoice.pos_invoice.get_stock_availability": "posnext.overrides.pos_invoice.get_stock_availability"
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
@@ -241,4 +257,33 @@ app_license = "mit"
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
+override_doctype_class = {
+    "Sales Order": "posnext.overrides.sales_order.PosnextSalesOrder",
+	# "Sales Invoice": "posnext.overrides.sales_invoice.PosnextSalesInvoice",
+	"POS Closing Entry": "posnext.overrides.pos_closing_entry.PosnextPOSClosingEntry",
+	"POS Invoice Merge Log": "posnext.overrides.pos_invoice_merge_log.PosnextPOSInvoiceMergeLog",
+}
 
+
+fixtures = [
+	{
+		"doctype":"Custom Field",
+		"filters": [
+			[
+				"module",
+				"in",
+				["Posnext"]
+            ]
+        ]
+	},
+	{
+		"doctype":"Property Setter",
+		"filters": [
+			[
+				"module",
+				"in",
+				["Posnext"]
+            ]
+        ]
+	},
+]
