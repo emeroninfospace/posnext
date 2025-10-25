@@ -48,10 +48,33 @@ posnext.PointOfSale.PastOrderList = class {
 			}, 300);
 		});
 		const me = this;
-		this.$invoices_container.on('click', '.invoice-wrapper', function() {
+		this.$invoices_container.on('click', '.invoice-wrapper', function(e) {
+			// Don't trigger if clicking on the "Go to Order" button
+			if ($(e.target).hasClass('go-order-btn')) {
+				return;
+			}
 			const invoice_name = unescape($(this).attr('data-invoice-name'));
 			me.events.open_invoice_data(invoice_name);
 		});
+		
+		// Handle "Go to Order" button click
+		this.$invoices_container.on('click', '.go-order-btn', function(e) {
+			e.stopPropagation(); // Prevent invoice-wrapper click event
+			const order_name = unescape($(this).attr('data-order-name'));
+			
+			// Open Sales Order document in a new form
+			frappe.set_route('Form', 'Sales Order', order_name);
+		});
+		
+		// Add hover effect for Go to Order button
+		this.$invoices_container.on('mouseenter', '.go-order-btn', function() {
+			$(this).css('background-color', '#1976d2');
+		});
+		
+		this.$invoices_container.on('mouseleave', '.go-order-btn', function() {
+			$(this).css('background-color', '#2490ef');
+		});
+		
 		this.$component.on('click', '.back', function() {
 			me.events.previous_screen()
 		});
@@ -130,6 +153,20 @@ posnext.PointOfSale.PastOrderList = class {
 				<div class="invoice-total-status">
 					<div class="invoice-total">${format_currency(invoice.grand_total, invoice.currency, 0) || 0}</div>
 					<div class="invoice-date">${posting_datetime}</div>
+				</div>
+				<div class="go-order-btn" data-order-name="${escape(invoice.name)}" style="
+					margin-top: 8px;
+					padding: 6px 12px;
+					background-color: #2490ef;
+					color: white;
+					text-align: center;
+					border-radius: 4px;
+					cursor: pointer;
+					font-size: 12px;
+					font-weight: 500;
+					transition: background-color 0.2s;
+				">
+					Go to Order
 				</div>
 			</div>
 			<div class="seperator"></div>`
