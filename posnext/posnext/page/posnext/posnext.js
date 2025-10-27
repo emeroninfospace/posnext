@@ -17,7 +17,7 @@ frappe.pages['posnext'].on_page_load = function(wrapper) {
 	}
 	frappe.ui.make_app_page({
 		parent: wrapper,
-		title: __('Point of Sales'),
+		title: __('VAN Sales'),
 		single_column: true
 	});
 
