@@ -447,30 +447,63 @@ posnext.PointOfSale.Controller = class {
 				this.cart.toggle_checkout_btn(false);
 			},
 
-			submit_invoice: () => {
+			submit_invoice: async () => {
 					console.log("Submit button clicked");
 
-					// For Sales Orders - just submit without payment validation
-					this.frm.savesubmit()
-						.then((r) => {
-							console.log("Submit successful:", r);
+					try {
+						const current_user = frappe.session.user;
+						console.log("Current user:", current_user);
 
-							// Hide payment
-							this.payment.toggle_component(false);
+						const sales_person_response = await frappe.call({
+							method: 'frappe.client.get_list',
+							args: {
+								doctype: 'Sales Person',
+								filters: {
+									'custom_user': current_user
+								},
+								fields: ['name'],
+								limit: 1
+							}
+						});
 
-							// Show success
-							frappe.show_alert({
-								indicator: 'green',
-								message: __('Sales Order {0} created successfully', [r.doc.name])
+						if (sales_person_response.message && sales_person_response.message.length > 0) {
+							const sales_person_name = sales_person_response.message[0].name;
+							console.log("Found Sales Person:", sales_person_name);
+
+							// Set custom_sales_person field in Sales Order
+							this.frm.doc.custom_sales_person = sales_person_name;
+
+							// Clear existing sales_team and add new entry
+							this.frm.clear_table("sales_team");
+							this.frm.add_child("sales_team", {
+								sales_person: sales_person_name,
+								allocated_percentage: 100
 							});
 
-							// Show receipt dialog
-							this.show_receipt_dialog(r.doc.name);
-						})
-						.catch((error) => {
-							console.error('Submit error:', error);
-							frappe.msgprint(__('Error: {0}', [error.message || 'Unknown error']));
+							console.log("Sales person set in sales_team and custom_sales_person");
+						} else {
+							console.log("No Sales Person found for user:", current_user);
+						}
+
+						// For Sales Orders - just submit without payment validation
+						const r = await this.frm.savesubmit();
+						console.log("Submit successful:", r);
+
+						// Hide payment
+						this.payment.toggle_component(false);
+
+						// Show success
+						frappe.show_alert({
+							indicator: 'green',
+							message: __('Sales Order {0} created successfully', [r.doc.name])
 						});
+
+						// Show receipt dialog
+						this.show_receipt_dialog(r.doc.name);
+					} catch (error) {
+						console.error('Submit error:', error);
+						frappe.msgprint(__('Error: {0}', [error.message || 'Unknown error']));
+					}
 				}
 			}
 		});
@@ -559,7 +592,7 @@ posnext.PointOfSale.Controller = class {
 				// ---- Build the receipt print URL ----
 				// Example: http(s)://yourdomain.com/print/Sales%20Order/SAL-ORD-2025-00098?format=Standard&no_letterhead=1
 				const base_url = window.location.origin;
-				const receipt_url = `${base_url}/print/Sales%20Order/${order_name}?format=Standard&no_letterhead=1`;
+				const receipt_url = `${base_url}/app/print/Sales%20Order/${order_name}?format=Standard&no_letterhead=1`;
 
 				// ---- Build the WhatsApp message including the link ----
 				const message_template =
@@ -1177,6 +1210,42 @@ posnext.PointOfSale.Controller = class {
 			// Save first if dirty
 			if (this.frm.is_dirty()) {
 				await this.frm.save();
+			}
+
+			// Get current logged-in user and set sales person
+			const current_user = frappe.session.user;
+			console.log("Current user:", current_user);
+
+			// Find Sales Person with custom_user matching current user
+			const sales_person_response = await frappe.call({
+				method: 'frappe.client.get_list',
+				args: {
+					doctype: 'Sales Person',
+					filters: {
+						'custom_user': current_user
+					},
+					fields: ['name'],
+					limit: 1
+				}
+			});
+
+			if (sales_person_response.message && sales_person_response.message.length > 0) {
+				const sales_person_name = sales_person_response.message[0].name;
+				console.log("Found Sales Person:", sales_person_name);
+
+				// Set custom_sales_person field in Sales Order
+				this.frm.doc.custom_sales_person = sales_person_name;
+
+				// Clear existing sales_team and add new entry
+				this.frm.clear_table("sales_team");
+				this.frm.add_child("sales_team", {
+					sales_person: sales_person_name,
+					allocated_percentage: 100
+				});
+
+				console.log("Sales person set in sales_team and custom_sales_person");
+			} else {
+				console.log("No Sales Person found for user:", current_user);
 			}
 
 			// Submit
