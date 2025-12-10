@@ -592,7 +592,7 @@ posnext.PointOfSale.Controller = class {
 				// ---- Build the receipt print URL ----
 				// Example: http(s)://yourdomain.com/print/Sales%20Order/SAL-ORD-2025-00098?format=Standard&no_letterhead=1
 				const base_url = window.location.origin;
-				const receipt_url = `${base_url}/app/print/Sales%20Order/${order_name}?format=Standard&no_letterhead=1`;
+				const receipt_url = `${base_url}/printview?doctype=Sales%20Order&name=${order_name}&format=Sales%20Order&no_letterhead=0&letterhead=Abitos`;
 
 				// ---- Build the WhatsApp message including the link ----
 				const message_template =
