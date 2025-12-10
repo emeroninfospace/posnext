@@ -426,9 +426,36 @@
           show_edit_cart_btn: () => {
             this.cart.toggle_checkout_btn(false);
           },
-          submit_invoice: () => {
+          submit_invoice: async () => {
             console.log("Submit button clicked");
-            this.frm.savesubmit().then((r) => {
+            try {
+              const current_user = frappe.session.user;
+              console.log("Current user:", current_user);
+              const sales_person_response = await frappe.call({
+                method: "frappe.client.get_list",
+                args: {
+                  doctype: "Sales Person",
+                  filters: {
+                    "custom_user": current_user
+                  },
+                  fields: ["name"],
+                  limit: 1
+                }
+              });
+              if (sales_person_response.message && sales_person_response.message.length > 0) {
+                const sales_person_name = sales_person_response.message[0].name;
+                console.log("Found Sales Person:", sales_person_name);
+                this.frm.doc.custom_sales_person = sales_person_name;
+                this.frm.clear_table("sales_team");
+                this.frm.add_child("sales_team", {
+                  sales_person: sales_person_name,
+                  allocated_percentage: 100
+                });
+                console.log("Sales person set in sales_team and custom_sales_person");
+              } else {
+                console.log("No Sales Person found for user:", current_user);
+              }
+              const r = await this.frm.savesubmit();
               console.log("Submit successful:", r);
               this.payment.toggle_component(false);
               frappe.show_alert({
@@ -436,10 +463,10 @@
                 message: __("Sales Order {0} created successfully", [r.doc.name])
               });
               this.show_receipt_dialog(r.doc.name);
-            }).catch((error) => {
+            } catch (error) {
               console.error("Submit error:", error);
               frappe.msgprint(__("Error: {0}", [error.message || "Unknown error"]));
-            });
+            }
           }
         }
       });
@@ -501,7 +528,7 @@
             return;
           }
           const base_url = window.location.origin;
-          const receipt_url = `${base_url}/print/Sales%20Order/${order_name}?format=Standard&no_letterhead=1`;
+          const receipt_url = `${base_url}/printview?doctype=Sales%20Order&name=${order_name}&format=Sales%20Order&no_letterhead=0&letterhead=Abitos`;
           const message_template = `Hello ${doc.customer},
 Your order ${order_name} has been confirmed.
 
@@ -999,6 +1026,32 @@ Thank you for your business!`;
       try {
         if (this.frm.is_dirty()) {
           await this.frm.save();
+        }
+        const current_user = frappe.session.user;
+        console.log("Current user:", current_user);
+        const sales_person_response = await frappe.call({
+          method: "frappe.client.get_list",
+          args: {
+            doctype: "Sales Person",
+            filters: {
+              "custom_user": current_user
+            },
+            fields: ["name"],
+            limit: 1
+          }
+        });
+        if (sales_person_response.message && sales_person_response.message.length > 0) {
+          const sales_person_name = sales_person_response.message[0].name;
+          console.log("Found Sales Person:", sales_person_name);
+          this.frm.doc.custom_sales_person = sales_person_name;
+          this.frm.clear_table("sales_team");
+          this.frm.add_child("sales_team", {
+            sales_person: sales_person_name,
+            allocated_percentage: 100
+          });
+          console.log("Sales person set in sales_team and custom_sales_person");
+        } else {
+          console.log("No Sales Person found for user:", current_user);
         }
         await this.frm.savesubmit();
         await this.frm.reload_doc();
@@ -4532,9 +4585,23 @@ Thank you for your business!`;
         }, 300);
       });
       const me = this;
-      this.$invoices_container.on("click", ".invoice-wrapper", function() {
+      this.$invoices_container.on("click", ".invoice-wrapper", function(e) {
+        if ($(e.target).hasClass("go-order-btn")) {
+          return;
+        }
         const invoice_name = unescape($(this).attr("data-invoice-name"));
         me.events.open_invoice_data(invoice_name);
+      });
+      this.$invoices_container.on("click", ".go-order-btn", function(e) {
+        e.stopPropagation();
+        const order_name = unescape($(this).attr("data-order-name"));
+        frappe.set_route("Form", "Sales Order", order_name);
+      });
+      this.$invoices_container.on("mouseenter", ".go-order-btn", function() {
+        $(this).css("background-color", "#1976d2");
+      });
+      this.$invoices_container.on("mouseleave", ".go-order-btn", function() {
+        $(this).css("background-color", "#2490ef");
       });
       this.$component.on("click", ".back", function() {
         me.events.previous_screen();
@@ -4615,6 +4682,20 @@ Closed`,
 				<div class="invoice-total-status">
 					<div class="invoice-total">${format_currency(invoice.grand_total, invoice.currency, 0) || 0}</div>
 					<div class="invoice-date">${posting_datetime}</div>
+				</div>
+				<div class="go-order-btn" data-order-name="${escape(invoice.name)}" style="
+					margin-top: 8px;
+					padding: 6px 12px;
+					background-color: #2490ef;
+					color: white;
+					text-align: center;
+					border-radius: 4px;
+					cursor: pointer;
+					font-size: 12px;
+					font-weight: 500;
+					transition: background-color 0.2s;
+				">
+					Go to Order
 				</div>
 			</div>
 			<div class="seperator"></div>`;
@@ -5037,4 +5118,4 @@ Closed`,
     }
   };
 })();
-//# sourceMappingURL=posnext.bundle.EDPXLD5Z.js.map
+//# sourceMappingURL=posnext.bundle.STUUYWS7.js.map
