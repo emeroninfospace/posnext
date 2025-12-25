@@ -3,7 +3,7 @@ posnext.PointOfSale.ItemCart = class {
 	constructor({ wrapper, events, settings }) {
 		this.wrapper = wrapper;
 		this.events = events;
-		this.customer_info = undefined;
+		// this.customer_info = undefined;
 		this.hide_images = settings.hide_images;
 		this.allowed_customer_groups = settings.customer_groups;
 		this.allow_rate_change = settings.allow_rate_change;
@@ -78,31 +78,32 @@ posnext.PointOfSale.ItemCart = class {
 					<div class="cart-header">
 						<div class="name-header" style="flex:3">${__('Item')}</div>
 						<div class="qty-header" style="flex: 1">${__('Qty')}</div>
+						<div class="uom-header" style="flex: 1">${__('UOM')}</div>
 						`
-			if(this.custom_show_uom_in_cart){
-				html += `<div class="uom-header" style="flex: 1">${__('UOM')}</div>`
-			}
-			if(this.show_batch_in_cart){
-				html += `<div class="batch-header" style="flex: 1">${__('Batch')}</div>`
-			}
-			if(this.custom_edit_rate){
-				html += `<div class="rate-header" style="flex: 1">${__('Rate')}</div>`
-			}
-			if(this.custom_use_discount_percentage){
-				html += `<div class="discount-perc-header" style="flex: 1">${__('Disc%')}</div>`
-			}
-			if(this.custom_use_discount_amount){
-				html += `<div class="discount-amount-header" style="flex: 1">${__('Disc')}</div>`
-			}
-			if(this.custom_show_incoming_rate){
-				html += `<div class="incoming-rate-header" style="flex: 1">${__('Inc.Rate')}</div>`
-			}
-			if(this.custom_show_logical_rack_in_cart){
-				html += `<div class="incoming-rate-header" style="flex: 1">${__('Rack')}</div>`
-			}
-			if(this.custom_show_last_customer_rate){
-				html += `<div class="last-customer-rate-header" style="flex: 1">${__('LC Rate')}</div>`
-			}
+			// if(this.custom_show_uom_in_cart){
+			// 	html += `<div class="uom-header" style="flex: 1">${__('UOM')}</div>`
+			// }
+			// if(this.show_batch_in_cart){
+			// 	html += `<div class="batch-header" style="flex: 1">${__('Batch')}</div>`
+			// }
+			// if(this.custom_edit_rate){
+			// 	html += `<div class="rate-header" style="flex: 1">${__('Rate')}</div>`
+			// }
+			// if(this.custom_use_discount_percentage){
+			// 	html += `<div class="discount-perc-header" style="flex: 1">${__('Disc%')}</div>`
+			// }
+			// if(this.custom_use_discount_amount){
+			// 	html += `<div class="discount-amount-header" style="flex: 1">${__('Disc')}</div>`
+			// }
+			// if(this.custom_show_incoming_rate){
+			// 	html += `<div class="incoming-rate-header" style="flex: 1">${__('Inc.Rate')}</div>`
+			// }
+			// if(this.custom_show_logical_rack_in_cart){
+			// 	html += `<div class="incoming-rate-header" style="flex: 1">${__('Rack')}</div>`
+			// }
+			// if(this.custom_show_last_customer_rate){
+			// 	html += `<div class="last-customer-rate-header" style="flex: 1">${__('LC Rate')}</div>`
+			// }
 			
 
 		html += `<div class="rate-amount-header" style="flex: 1;text-align: left">${__('Amount')}</div>
@@ -732,7 +733,7 @@ this.highlight_checkout_btn(true);
 									'padding': 'var(--padding-sm) var(--padding-md)'
 								});
 								me.$add_discount_elem.html(`${me.get_discount_icon()} ${__('Add Discount')}`);
-								me.discount_field = undefined;
+								// me.discount_field = undefined;
 							}
 						}, 3000);
 					},
@@ -760,7 +761,7 @@ this.highlight_checkout_btn(true);
 									'padding': 'var(--padding-sm) var(--padding-md)'
 								});
 								me.$add_discount_elem.html(`${me.get_discount_icon()} ${__('Add Discount')}`);
-								me.discount_field = undefined;
+								// me.discount_field = undefined;
 							}
 						}, 3000)
 					},
@@ -997,8 +998,8 @@ this.highlight_checkout_btn(true);
 		}
 
 		item_html += `<div class="item-name" style="flex: 4; white-space: normal; word-wrap: break-word; overflow: visible; line-height: 1.2;">
-					${item_data.item_name}
-				</div>
+					${item_data.item_name || item_data.item_code || ''}
+					</div>
 				${ get_description_html(item_data) }
 				${get_item_barcode(item_data)}
 			</div>
@@ -1156,7 +1157,7 @@ this.highlight_checkout_btn(true);
             remove_button.refresh(); // Make sure button is rendered
             $(remove_button.$input).on("click", function() {
 				me.events.remove_item_from_cart(item_data)
-				me.prev_action = undefined;
+				// me.prev_action = undefined;
 				me.toggle_item_highlight();
 				me.events.numpad_event(undefined, "remove");
 
@@ -1291,46 +1292,47 @@ this.highlight_checkout_btn(true);
                 }
 			} else {
 				if (item_data.rate && item_data.amount && item_data.rate !== item_data.amount) {
-                    return `
-                        <div class="item-qty-rate" style="flex: 4" > 
-                            <div class="item-qty" style="flex: 1"><span>${item_data.qty || 0}</span></div>
-                            <div class="item-qty" style="flex: 1"><span> ${item_data.uom}</span></div>
-							<div class="item-qty" style="flex: 1"><span> ${item_data.batch}</span></div>
-                            <div class="item-rate-amount" style="flex: 1">
-                                <div class="item-rate">${parseFloat(item_data.amount).toFixed(2)}</div>
-                                <div class="item-amount">${parseFloat(item_data.rate).toFixed(2)}</div>
-                            </div>
-                        </div>`
-                } else {
-                    return `
-                        <div class="item-qty-rate" style="flex: 4" >
-                            <div class="item-qty" style="flex: 1" ><span>${item_data.qty || 0}</span></div>
-                            <div class="item-qty" style="flex: 1"><span> ${item_data.uom}</span></div>
-							<div class="item-qty" style="flex: 1"><span> ${item_data.batch}</span></div>
-                            <div class="item-rate-amount" style="flex: 1">
-                                <div class="item-rate">${parseFloat(item_data.rate).toFixed(2)}</div>
-                            </div>
-                        </div>`
-                }
+					return `
+						<div class="item-qty-rate" style="flex: 4" > 
+							<div class="item-qty" style="flex: 1"><span>${item_data.qty || 0}</span></div>
+							<div class="item-qty" style="flex: 1"><span> ${item_data.uom || ''}</span></div>
+							<div class="item-qty" style="flex: 1"><span> ${item_data.batch || ''}</span></div>
+							<div class="item-rate-amount" style="flex: 1">
+								<div class="item-rate">${item_data.amount ? parseFloat(item_data.amount).toFixed(2) : '0.00'}</div>
+								<div class="item-amount">${item_data.rate ? parseFloat(item_data.rate).toFixed(2) : '0.00'}</div>
+							</div>
+						</div>`
+				} else {
+					return `
+						<div class="item-qty-rate" style="flex: 4" >
+							<div class="item-qty" style="flex: 1" ><span>${item_data.qty || 0}</span></div>
+							<div class="item-qty" style="flex: 1"><span> ${item_data.uom || ''}</span></div>
+							<div class="item-qty" style="flex: 1"><span> ${item_data.batch || ''}</span></div>
+							<div class="item-rate-amount" style="flex: 1">
+								<div class="item-rate">${item_data.rate ? parseFloat(item_data.rate).toFixed(2) : '0.00'}</div>
+							</div>
+						</div>`
+				}
 			}
 
 		}
 
 		function get_description_html(item_data) {
 			const hide_description = me.custom_show_item_discription;
-			if (hide_description) {
-				if (item_data.description.indexOf('<div>') != -1) {
+			if (hide_description && item_data && item_data.description) {
+				let desc = item_data.description;
+				if (typeof desc === 'string' && desc.indexOf('<div>') != -1) {
 					try {
-						item_data.description = $(item_data.description).text();
+						desc = $(desc).text();
 					} catch (error) {
-						item_data.description = item_data.description
+						desc = desc
 							.replace(/<div>/g, ' ')
 							.replace(/<\/div>/g, ' ')
 							.replace(/ +/g, ' ');
 					}
 				}
-				item_data.description = frappe.ellipsis(item_data.description, 45);
-				return `<div class="item-desc">${item_data.description}</div>`;
+				desc = frappe.ellipsis(String(desc), 45);
+				return `<div class="item-desc">${desc}</div>`;
 			}
 			return ``;
 		}
@@ -1369,13 +1371,14 @@ this.highlight_checkout_btn(true);
 		}
 
 		function get_item_image_html() {
-			const { image, item_name } = item_data;
+			const image = item_data && item_data.image;
+			const item_name = item_data && (item_data.item_name || '');
 			if (!me.hide_images && image) {
 				return `
 					<div class="item-image">
 						<img
 							onerror="cur_pos.cart.handle_broken_image(this)"
-							src="${image}" alt="${frappe.get_abbr(item_name)}"">
+							src="${image}" alt="${frappe.get_abbr(item_name)}">
 					</div>`;
 			} else {
 				return `<div class="item-image item-abbr">${frappe.get_abbr(item_name)}</div>`;
@@ -1497,17 +1500,18 @@ this.highlight_checkout_btn(true);
 			if (first_click_event || field_to_edit_changed) {
 				this.prev_action = current_action;
 			} else if (action_is_pressed_twice) {
-				this.prev_action = undefined;
+				pass
+				// this.prev_action = undefined;
 			}
 			this.numpad_value = '';
 
 		} else if (current_action === 'checkout') {
-			this.prev_action = undefined;
+			// this.prev_action = undefined;
 			this.toggle_item_highlight();
 			this.events.numpad_event(undefined, current_action);
 			return;
 		} else if (current_action === 'remove') {
-			this.prev_action = undefined;
+			// this.prev_action = undefined;
 			this.toggle_item_highlight();
 			this.events.numpad_event(undefined, current_action);
 			return;
@@ -1577,7 +1581,7 @@ this.highlight_checkout_btn(true);
 
 	reset_numpad() {
 		this.numpad_value = '';
-		this.prev_action = undefined;
+		// this.prev_action = undefined;
 		this.$numpad_section.find('.highlighted-numpad-btn').removeClass('highlighted-numpad-btn');
 	}
 
