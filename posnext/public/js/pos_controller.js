@@ -270,6 +270,8 @@ posnext.PointOfSale.Controller = class {
 		if (this.frm) {
 			this.frm.doc.set_warehouse = this.settings.warehouse
 		}
+		// Set window.cur_pos for access from other modules
+		window.cur_pos = this;
 		this.item_selector = new posnext.PointOfSale.ItemSelector({
 			wrapper: this.$components_wrapper,
 			pos_profile: this.pos_profile,
@@ -793,6 +795,10 @@ posnext.PointOfSale.Controller = class {
 				this.frm.doc.set_warehouse = this.settings.warehouse
 				this.frm.doc.transaction_date = frappe.datetime.get_today();
 				this.frm.doc.delivery_date = frappe.datetime.get_today();
+				// Set default custom_type from VAT type if available
+				if (this.item_selector && this.item_selector.vat_type) {
+					this.frm.doc.custom_type = this.item_selector.vat_type;
+				}
 				resolve();
 			} else {
 				frappe.model.with_doctype(doctype, () => {
@@ -803,6 +809,10 @@ posnext.PointOfSale.Controller = class {
 					this.frm.doc.set_warehouse = this.settings.warehouse
 					this.frm.doc.transaction_date = frappe.datetime.get_today();
 					this.frm.doc.delivery_date = frappe.datetime.get_today();
+					// Set default custom_type from VAT type if available
+					if (this.item_selector && this.item_selector.vat_type) {
+						this.frm.doc.custom_type = this.item_selector.vat_type;
+					}
 					resolve();
 				});
 			}
@@ -849,7 +859,17 @@ posnext.PointOfSale.Controller = class {
 
 		if (!this.frm.doc.company) return;
 
-		return this.frm.trigger("set_pos_data");
+		return this.frm.trigger("set_pos_data").then(() => {
+			// Set custom_type from VAT type selection
+			if (this.item_selector && this.item_selector.vat_type) {
+				this.frm.doc.custom_type = this.item_selector.vat_type;
+			}
+			
+			// After POS data is set, update VAT based on VAT type selection
+			if (this.item_selector && this.item_selector.update_vat_on_sales_order) {
+				this.item_selector.update_vat_on_sales_order();
+			}
+		});
 	}
 
 	set_pos_profile_status() {
