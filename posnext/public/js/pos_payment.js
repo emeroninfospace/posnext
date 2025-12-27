@@ -35,9 +35,7 @@ posnext.PointOfSale.Payment = class {
 				<div class="fields-numpad-container">
 					
 				</div>
-				<div class="totals-section">
-					<div class="totals"></div>
-				</div>
+
 				<div class="edit-cart-btn-payment" style="
 					padding: 12px;
 					margin: 10px 0;
@@ -50,6 +48,7 @@ posnext.PointOfSale.Payment = class {
 					font-weight: 500;
 					transition: all 0.2s ease;
 				">${__('Edit Cart')}</div>
+
 				<div class="submit-order-btn">${__("Complete Order")}</div>
 			</section>`
 		);
