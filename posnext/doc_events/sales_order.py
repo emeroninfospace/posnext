@@ -3,30 +3,37 @@
 
 import frappe
 from frappe import _
-from frappe.utils import nowdate, flt
+from frappe.utils import nowdate, add_days, flt
 
 
 def validate_so(doc, method):
+    
     """Validate Sales Order for POS"""
     # ONLY run if this is a POSNext Sales Order
     if not doc.get('custom_is_posnext'):
         return  # Skip for standalone Sales Orders
     
+    doc.reserve_stock = 1
+    
     if doc.get('pos_profile'):
+        doc.delivery_date = add_days(nowdate(), 2)
         # Validate branch if required
         show_branch = frappe.db.get_value("POS Profile", doc.pos_profile, 'show_branch')
         if not doc.get('branch') and show_branch == 1:
             frappe.throw(_("Create Branch Accounting Dimensions."))
         
-        # Set delivery date if not set
-        if not doc.delivery_date:
-            doc.delivery_date = nowdate()
+        
+            
+
+            
+            frappe.msgprint(f"Setting delivery date to: {doc.delivery_date}")
         
         # Set sales person from user
         sales_person = get_sales_person_for_user()
         if sales_person:
             if doc.get('custom_sales_person'):
                 doc.custom_sales_person = sales_person
+                
             
             # Add to sales team if not present
             if not doc.get('sales_team'):
