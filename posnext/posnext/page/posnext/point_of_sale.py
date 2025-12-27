@@ -41,7 +41,8 @@ def search_by_term(search_term,custom_show_alternative_item_for_pos_search, ware
 		"serial_no": serial_no,
 		"stock_uom": item_doc.stock_uom,
 		"uom": item_doc.stock_uom,
-		"item_uoms": frappe.db.get_all("UOM Conversion Detail", {"parent": item_doc.item_code}, ["uom"], pluck="uom")
+		"item_uoms": frappe.db.get_all("UOM Conversion Detail", {"parent": item_doc.item_code}, ["uom"], pluck="uom"),
+		"custom_is_promo": item_doc.get("custom_is_promo", 0)
 	}
 
 	if barcode:
@@ -145,7 +146,8 @@ def get_items(start, page_length, price_list, item_group, pos_profile, search_te
 			item.stock_uom,
 			{bin_valuation_rate}
 			item.image AS item_image,
-			item.is_stock_item
+			item.is_stock_item,
+			item.custom_is_promo
 		FROM
 			`tabItem` item {bin_join_selection}
 		WHERE
