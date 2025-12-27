@@ -465,7 +465,7 @@ posnext.PointOfSale.ItemSelector = class {
 		const me = this;
 		item.currency = item.currency  || me.currency
 		// eslint-disable-next-line no-unused-vars
-		const { item_image, serial_no, batch_no, barcode, actual_qty, uom, price_list_rate } = item;
+		const { item_image, serial_no, batch_no, barcode, actual_qty, uom, price_list_rate, custom_is_promo } = item;
 		const precision = flt(price_list_rate, 2) % 1 != 0 ? 2 : 0;
 		let indicator_color;
 		let qty_to_display = actual_qty;
@@ -482,12 +482,29 @@ posnext.PointOfSale.ItemSelector = class {
 			qty_to_display = '';
 		}
 
+		function get_promotional_badge() {
+			if (custom_is_promo) {
+				return `<div class="promotional-badge" style="position: absolute; left: 0; top: 0; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 6px 12px; border-radius: 0 0 12px 0; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); z-index: 10; white-space: nowrap; transform: translateY(0);">
+							${__('Promo')}
+						</div>`;
+			}
+			return '';
+		}
+
+		function get_quantity_indicator() {
+			if (item.is_stock_item && qty_to_display !== '') {
+				return `<div class="item-qty-pill" style="position: absolute; right: 8px; top: 8px; z-index: 10;">
+							<span class="indicator-pill whitespace-nowrap ${indicator_color}">${qty_to_display}</span>
+						</div>`;
+			}
+			return '';
+		}
+
 		function get_item_image_html() {
 			if (!me.hide_images && item_image) {
-				return `<div class="item-qty-pill">
-							<span class="indicator-pill whitespace-nowrap ${indicator_color}">${qty_to_display}</span>
-						</div>
-						<div class="flex items-center justify-center h-32 border-b-grey text-6xl text-grey-100">
+				return `<div class="flex items-center justify-center h-32 border-b-grey text-6xl text-grey-100" style="position: relative;">
+							${get_promotional_badge()}
+							${get_quantity_indicator()}
 							<img
 								onerror="cur_pos.item_selector.handle_broken_image(this)"
 								class="h-full item-img" src="${item_image}"
@@ -495,10 +512,11 @@ posnext.PointOfSale.ItemSelector = class {
 							>
 						</div>`;
 			} else {
-				return `<div class="item-qty-pill">
-							<span class="indicator-pill whitespace-nowrap ${indicator_color}">${qty_to_display}</span>
-						</div>
-						<div class="item-display abbr">${frappe.get_abbr(item.item_name)}</div>`;
+				return `<div class="item-display abbr" style="position: relative;">
+							${get_promotional_badge()}
+							${get_quantity_indicator()}
+							${frappe.get_abbr(item.item_name)}
+						</div>`;
 			}
 		}
 
@@ -507,7 +525,8 @@ posnext.PointOfSale.ItemSelector = class {
 				data-item-code="${escape(item.item_code)}" data-serial-no="${escape(serial_no)}"
 				data-batch-no="${escape(batch_no)}" data-uom="${escape(uom)}"
 				data-rate="${escape(price_list_rate || 0)}"
-				title="${item.item_name}">
+				title="${item.item_name}"
+				style="position: relative;">
 
 				${get_item_image_html()}
 
