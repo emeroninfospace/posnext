@@ -25,12 +25,27 @@ frappe.ui.form.on('Sales Order', {
                 console.log("POS Profile loaded:", pos_profile); // Debug
                 console.log("POS Profile taxes_and_charges:", pos_profile.taxes_and_charges); // Debug
                 
-                // Set taxes and charges from POS Profile
-                if (pos_profile.taxes_and_charges) {
+                // Check VAT Type from item selector if available
+                const vat_type = window.cur_pos && window.cur_pos.item_selector && window.cur_pos.item_selector.vat_type 
+                    ? window.cur_pos.item_selector.vat_type 
+                    : 'Shop Sales'; // Default to Shop Sales
+                
+                // Set custom_type field in sales order
+                if (vat_type) {
+                    frm.set_value('custom_type', vat_type);
+                }
+                
+                // Set taxes and charges from POS Profile only if VAT Type is "Shop Sales"
+                if (vat_type === 'Shop Sales' && pos_profile.taxes_and_charges) {
                     console.log("Setting taxes_and_charges:", pos_profile.taxes_and_charges); // Debug
                     frm.set_value('taxes_and_charges', pos_profile.taxes_and_charges);
                     // Trigger taxes_and_charges to load the actual tax rows
                     frm.trigger('taxes_and_charges');
+                } else if (vat_type === 'Export Sales') {
+                    // Clear taxes for zero VAT
+                    frm.set_value('taxes_and_charges', '');
+                    frm.clear_table('taxes');
+                    frm.refresh_field('taxes');
                 }
                 
                 // Set other POS Profile fields

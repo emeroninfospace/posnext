@@ -60,10 +60,11 @@ posnext.PointOfSale.ItemSelector = class {
 			}
 			this.wrapper.append(
 				`<section class="items-selector" id="card-view-section" style="grid-column: span 5/span 5!important;">
-					<div class="filter-section">` + cardlist + `<div class="pos-profile" style="grid-column: span 2 / span 2"></div>
+					<div class="filter-section">` + cardlist + `<div class="pos-profile" style="grid-column: span 2 / span 2;display: none;"></div>
 						<div class="search-field" style="grid-column: span 4 / span 4"></div>
 						<!--<div class="item-code-search-field" style="grid-column: span 2 / span 2"></div>-->
 						<div class="item-group-field" style="grid-column: span 2 / span 2"></div>
+						<div class="vat-type-field" style="margin-left: 10px;grid-column: span 2 / span 2;width: 211%;"></div>
 						<div class="invoice-posting-date" style="margin-left: 10px;grid-column: span 2 / span 2"></div>` + tir + `
 						
 					</div>
@@ -86,10 +87,11 @@ posnext.PointOfSale.ItemSelector = class {
 
 
 			this.wrapper.append(
-				section + `<div class="filter-section">` + cardlist + `<div class="pos-profile" style="grid-column: span 2 / span 2"></div>
+				section + `<div class="filter-section">` + cardlist + `<div class="pos-profile" style="grid-column: span 2 / span 2;display: none;"></div>
 						<div class="search-field" style="grid-column: span 4 / span 4"></div>
 						<!--<div class="item-code-search-field" style="grid-column: span 2 / span 2"></div>-->
 						<div class="item-group-field" style="grid-column: span 2 / span 2"></div>
+						<div class="vat-type-field" style="margin-left: 10px;grid-column: span 2 / span 2;width: 211%;"></div>
 						<div class="invoice-posting-date" style="margin-left: 10px;grid-column: span 2 / span 2"></div>` + tir + `
 						
 					</div>
@@ -557,6 +559,7 @@ posnext.PointOfSale.ItemSelector = class {
 		this.$component.find('.pos-profile').html('');
 		this.$component.find('.total-incoming-rate').html('');
 		this.$component.find('.item-group-field').html('');
+		this.$component.find('.vat-type-field').html('');
 		this.$component.find('.invoice-posting-date').html('');
 		frappe.db.get_single_value("POS Settings","custom_profile_lock").then(doc => {
 			this.pos_profile_field = frappe.ui.form.make_control({
@@ -616,6 +619,25 @@ posnext.PointOfSale.ItemSelector = class {
 			parent: this.$component.find('.item-group-field'),
 			render_input: true,
 		});
+
+		// VAT Type field
+		this.vat_type_field = frappe.ui.form.make_control({
+			df: {
+				label: __('Vat Type'),
+				fieldtype: 'Select',
+				options: '\nShop Sales\nExport Sales',
+				placeholder: __('Select Vat Type'),
+				default: 'Shop Sales',
+				onchange: function() {
+					me.vat_type = this.value;
+					me.update_vat_on_sales_order();
+				},
+			},
+			parent: this.$component.find('.vat-type-field'),
+			render_input: true,
+		});
+		this.vat_type = 'Shop Sales'; // Default value
+		this.vat_type_field.set_value('Shop Sales');
 		if(this.custom_show_last_incoming_rate || this.custom_show_incoming_rate) {
             this.total_incoming_rate = frappe.ui.form.make_control({
                 df: {
@@ -648,6 +670,7 @@ posnext.PointOfSale.ItemSelector = class {
 
 		this.search_field.toggle_label(false);
 		this.item_group_field.toggle_label(false);
+		this.vat_type_field.toggle_label(false);
 		if(this.custom_show_last_incoming_rate) {
             this.total_incoming_rate.toggle_label(false);
         }
@@ -658,6 +681,42 @@ posnext.PointOfSale.ItemSelector = class {
         }
 
 		this.attach_clear_btn();
+	}
+
+	update_vat_on_sales_order() {
+		const me = this;
+		const frm = me.events.get_frm();
+		if (!frm || !frm.doc) return;
+
+		// Store VAT type in window for access from sales_order.js
+		if (window.cur_pos) {
+			window.cur_pos.item_selector = me;
+		}
+
+		// Set custom_type field in sales order
+		if (frm.doc && frm.doc.doctype === 'Sales Order') {
+			frm.set_value('custom_type', me.vat_type);
+		}
+
+		if (me.vat_type === 'Shop Sales') {
+			// Apply VAT 5% - get taxes_and_charges from POS Profile
+			if (frm.doc.pos_profile) {
+				frappe.db.get_doc('POS Profile', frm.doc.pos_profile).then(pos_profile => {
+					if (pos_profile.taxes_and_charges) {
+						frm.set_value('taxes_and_charges', pos_profile.taxes_and_charges);
+						frm.trigger('taxes_and_charges');
+					}
+				});
+			}
+		} else if (me.vat_type === 'Export Sales') {
+			// Remove VAT - clear taxes_and_charges
+			frm.set_value('taxes_and_charges', '');
+			frm.clear_table('taxes');
+			frm.refresh_field('taxes');
+			if (frm.cscript && frm.cscript.calculate_taxes_and_totals) {
+				frm.cscript.calculate_taxes_and_totals();
+			}
+		}
 	}
 
 	attach_clear_btn() {
