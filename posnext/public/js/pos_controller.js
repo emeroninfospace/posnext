@@ -3,7 +3,7 @@ var selected_item = null
 
 posnext.PointOfSale.Controller = class {
 	constructor(wrapper) {
-		console.log("CONTROLLLLLERE")
+		console.log("CONTROLLLER HERE ssssssadasdasd")
 		this.wrapper = $(wrapper).find('.layout-main-section');
 		this.page = wrapper.page;
 		frappe.run_serially([
@@ -12,31 +12,16 @@ posnext.PointOfSale.Controller = class {
 			() => this.reload_status = true,
 		]);
 
-		this.setup_form_events();
+
 
 	}
-	setup_form_events() {
-		frappe.ui.form.on('Sales Order', {
-			after_save: function (frm) {
-				if (!frm.doc.pos_profile) return;
-
-				frappe.db.get_doc('POS Profile', frm.doc.pos_profile)
-					.then(pos_profile => {
-						if (pos_profile.custom_stock_update) {
-							frm.set_value('update_stock', 0);
-							// frm.save();
-						}
-					});
-			}
-		});
-	}
-
 
 	fetch_opening_entry(value) {
 		return frappe.call("posnext.posnext.page.posnext.point_of_sale.check_opening_entry", { "user": frappe.session.user, "value": value });
 	}
 
 	check_opening_entry(value = "") {
+
 		this.fetch_opening_entry(value).then((r) => {
 			if (r.message.length) {
 				// assuming only one opening voucher is available for the current user
@@ -107,7 +92,7 @@ posnext.PointOfSale.Controller = class {
 					fields: table_fields
 				}
 			],
-			primary_action: async function ({ company, pos_profile, balance_details }) {
+			primary_action: async function({ company, pos_profile, balance_details }) {
 				if (!balance_details.length) {
 					frappe.show_alert({
 						message: __("Please add Mode of payments and opening balance details."),
@@ -120,7 +105,7 @@ posnext.PointOfSale.Controller = class {
 				balance_details = balance_details.filter(d => d.mode_of_payment);
 
 				const method = "posnext.posnext.page.posnext.point_of_sale.create_opening_voucher";
-				const res = await frappe.call({ method, args: { pos_profile, company, balance_details }, freeze: true });
+				const res = await frappe.call({ method, args: { pos_profile, company, balance_details }, freeze:true });
 				!res.exc && me.prepare_app_defaults(res.message);
 				dialog.hide();
 			},
@@ -196,16 +181,16 @@ posnext.PointOfSale.Controller = class {
 
 	prepare_menu() {
 		this.page.clear_menu();
-		if (this.settings.custom_show_open_form_view) {
+		if(this.settings.custom_show_open_form_view){
 			this.page.add_menu_item(__("Open Form View"), this.open_form_view.bind(this), false, 'Ctrl+F');
 		}
-		if (this.settings.custom_show_toggle_recent_orders) {
+		if(this.settings.custom_show_toggle_recent_orders) {
 			this.page.add_menu_item(__("Toggle Recent Orders"), this.toggle_recent_order.bind(this), false, 'Ctrl+O');
 		}
-		if (this.settings.custom_show_save_as_draft) {
+		if(this.settings.custom_show_save_as_draft) {
 			this.page.add_menu_item(__("Save as Draft"), this.save_draft_invoice.bind(this), false, 'Ctrl+S');
 		}
-		if (this.settings.custom_show_close_the_pos) {
+		if(this.settings.custom_show_close_the_pos) {
 			this.page.add_menu_item(__('Close the POS'), this.close_pos.bind(this), false, 'Shift+Ctrl+C');
 		}
 	}
@@ -222,11 +207,11 @@ posnext.PointOfSale.Controller = class {
 
 	save_draft_invoice() {
 		if (!this.$components_wrapper.is(":visible")) return;
-		console.log(this.frm.doc.items)
+
 		if (this.frm.doc.items.length == 0) {
 			frappe.show_alert({
 				message: __("You must add atleast one item to save it as draft."),
-				indicator: 'red'
+				indicator:'red'
 			});
 			frappe.utils.play_sound("error");
 			return;
@@ -241,7 +226,7 @@ posnext.PointOfSale.Controller = class {
 		}).then(() => {
 			frappe.run_serially([
 				() => frappe.dom.freeze(),
-				() => this.make_new_invoice(false),
+				() => this.make_new_invoice(true),
 				() => frappe.dom.unfreeze()
 
 
@@ -267,11 +252,9 @@ posnext.PointOfSale.Controller = class {
 	}
 
 	init_item_selector() {
-		if (this.frm) {
-			this.frm.doc.set_warehouse = this.settings.warehouse
+		if(this.frm){
+		this.frm.doc.set_warehouse = this.settings.warehouse
 		}
-		// Set window.cur_pos for access from other modules
-		window.cur_pos = this;
 		this.item_selector = new posnext.PointOfSale.ItemSelector({
 			wrapper: this.$components_wrapper,
 			pos_profile: this.pos_profile,
@@ -281,6 +264,7 @@ posnext.PointOfSale.Controller = class {
 			events: {
 				check_opening_entry: () => this.check_opening_entry(),
 				item_selected: args => this.on_cart_update(args),
+
 				init_item_cart: () => this.init_item_cart(),
 				init_item_details: () => this.init_item_details(),
 				change_items: (args) => this.change_items(args),
@@ -288,10 +272,23 @@ posnext.PointOfSale.Controller = class {
 			}
 		})
 	}
-	change_items(items) {
+	change_items(items){
 		var me = this
 		this.frm = items;
 		this.cart.load_invoice()
+		// for(var x=0;x<items.length;x+=1){
+		// 	var item_code = items[x].item_code
+		// 	var batch_no = items[x].batch_no
+		// 	var serial_no = items[x].serial_no
+		// 	var uom =items[x].uom
+		// 	var rate = items[x].rate
+		// 	me.on_cart_update({
+		// 			field: 'qty',
+		// 			value: items[x].qty === 0 ? "+1" : items[x].qty,
+		// 			item: { item_code, batch_no, serial_no, uom, rate}
+		// 	})
+		// 	// this.update_cart_html(this.frm.items[x])
+		// }
 	}
 
 	init_item_cart() {
@@ -300,41 +297,19 @@ posnext.PointOfSale.Controller = class {
 			settings: this.settings,
 			events: {
 				get_frm: () => this.frm,
-				remove_item_from_cart: (item) => {
-					this.item_details.current_item = item
-					this.item_details.name = item.name
-					this.item_details.doctype = item.doctype
 
-				},
-				form_updated: (item, field, value) => {
-					this.item_details.current_item = item
-					const item_row = frappe.model.get_doc(item.doctype, item.name);
-					if (field === 'qty' && this.frm.doc.is_return && value >= 0) {
-						frappe.throw("Qty must be negative for return document")
-					}
-					if (item_row && item_row[field] != value) {
-						const args = {
-							field,
-							value,
-							item: this.item_details.current_item
-						};
-						return this.on_cart_update(args);
-					}
-
-					return Promise.resolve();
-				},
 				cart_item_clicked: (item) => {
+					console.log("ITEEEEEEEM")
+					console.log(item)
 
 					const item_row = this.get_item_from_frm(item);
 
-					if (selected_item && selected_item['name'] == item['name']) {
-						selected_item = null;
-						this.item_details.toggle_item_details_section(null);
+					if(selected_item && selected_item['name'] == item['name']){
+						selected_item = null
 					} else {
-						selected_item = item_row;
-						this.item_details.toggle_item_details_section(item_row);
+						selected_item = item_row
 					}
-					// this.item_details.toggle_item_details_section(item_row);
+					this.item_details.toggle_item_details_section(item_row);
 				},
 
 				numpad_event: (value, action) => this.update_item_field(value, action),
@@ -367,9 +342,6 @@ posnext.PointOfSale.Controller = class {
 
 				form_updated: (item, field, value) => {
 					const item_row = frappe.model.get_doc(item.doctype, item.name);
-					if (field === 'qty' && this.frm.doc.is_return && value >= 0) {
-						frappe.throw("Qty must be negative for return document")
-					}
 					if (item_row && item_row[field] != value) {
 						const args = {
 							field,
@@ -421,7 +393,7 @@ posnext.PointOfSale.Controller = class {
 				get_available_stock: (item_code, warehouse) => this.get_available_stock(item_code, warehouse)
 			}
 		});
-		if (selected_item) {
+		if(selected_item){
 			this.item_details.toggle_item_details_section(selected_item);
 		}
 	}
@@ -429,223 +401,33 @@ posnext.PointOfSale.Controller = class {
 	init_payments() {
 		this.payment = new posnext.PointOfSale.Payment({
 			wrapper: this.$components_wrapper,
-			settings: this.settings,
 			events: {
 				get_frm: () => this.frm || {},
 
 				get_customer_details: () => this.customer_details || {},
 
-			toggle_other_sections: (show) => {
-				if (show) {
-					this.item_details.$component.is(':visible') ? this.item_details.$component.css('display', 'none') : '';
-					this.item_selector.toggle_component(false);
-				} else {
-					this.item_selector.toggle_component(true);
-				}
-			},
-
-			show_edit_cart_btn: () => {
-				// Show "Edit Cart" button when payment screen is visible
-				this.cart.toggle_checkout_btn(false);
-			},
-
-			submit_invoice: async () => {
-					console.log("Submit button clicked");
-
-					try {
-						const current_user = frappe.session.user;
-						console.log("Current user:", current_user);
-
-						const sales_person_response = await frappe.call({
-							method: 'frappe.client.get_list',
-							args: {
-								doctype: 'Sales Person',
-								filters: {
-									'custom_user': current_user
-								},
-								fields: ['name'],
-								limit: 1
-							}
-						});
-
-						if (sales_person_response.message && sales_person_response.message.length > 0) {
-							const sales_person_name = sales_person_response.message[0].name;
-							console.log("Found Sales Person:", sales_person_name);
-
-							// Set custom_sales_person field in Sales Order
-							this.frm.doc.custom_sales_person = sales_person_name;
-
-							// Clear existing sales_team and add new entry
-							this.frm.clear_table("sales_team");
-							this.frm.add_child("sales_team", {
-								sales_person: sales_person_name,
-								allocated_percentage: 100
-							});
-
-							console.log("Sales person set in sales_team and custom_sales_person");
-						} else {
-							console.log("No Sales Person found for user:", current_user);
-						}
-
-						// For Sales Orders - just submit without payment validation
-						const r = await this.frm.savesubmit();
-						console.log("Submit successful:", r);
-
-						// Hide payment
-						this.payment.toggle_component(false);
-
-						// Show success
-						frappe.show_alert({
-							indicator: 'green',
-							message: __('Sales Order {0} created successfully', [r.doc.name])
-						});
-
-						// Show receipt dialog
-						this.show_receipt_dialog(r.doc.name);
-					} catch (error) {
-						console.error('Submit error:', error);
-						frappe.msgprint(__('Error: {0}', [error.message || 'Unknown error']));
+				toggle_other_sections: (show) => {
+					if (show) {
+						this.item_details.$component.is(':visible') ? this.item_details.$component.css('display', 'none') : '';
+						this.item_selector.toggle_component(false);
+					} else {
+						this.item_selector.toggle_component(true);
 					}
+				},
+
+				submit_invoice: () => {
+					this.frm.savesubmit()
+						.then((r) => {
+							this.toggle_components(false);
+							this.order_summary.toggle_component(true);
+							this.order_summary.load_summary_of(this.frm.doc, true);
+							frappe.show_alert({
+								indicator: 'green',
+								message: __('POS invoice {0} created succesfully', [r.doc.name])
+							});
+						});
 				}
 			}
-		});
-	}
-
-	show_receipt_dialog(order_name) {
-		const me = this;
-
-		const dialog = new frappe.ui.Dialog({
-			title: __('Order Submitted Successfully'),
-			fields: [
-				{
-					fieldtype: 'HTML',
-					options: `
-                    <div style="text-align: center; padding: 30px;">
-                        <div style="font-size: 64px; color: #28a745; margin-bottom: 20px;">
-                            ✓
-                        </div>
-                        <h3 style="margin-bottom: 10px;">${__('Sales Order {0} Created', [order_name])}</h3>
-                        
-                        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 40px;">
-                            <button class="btn btn-primary btn-lg btn-print-receipt" style="padding: 15px 40px;">
-                                <i class="fa fa-print"></i> ${__('Print Receipt')}
-                            </button>
-                            <!--<button class="btn btn-default btn-lg btn-email-receipt" style="padding: 15px 40px;">
-                                <i class="fa fa-envelope"></i> ${__('Email Receipt')}
-                            </button>-->
-                            <button class="btn btn-success btn-lg btn-whatsapp-share" style="padding: 15px 40px; background: #25D366; border-color: #25D366; color: white;">
-                                <i class="fa fa-whatsapp"></i> ${__('WhatsApp Share')}
-                            </button>
-                            <button class="btn btn-info btn-lg btn-new-order" style="padding: 15px 40px;">
-                                <i class="fa fa-plus"></i> ${__('New Order')}
-                            </button>
-                        </div>
-                    </div>
-                `
-				}
-			]
-		});
-
-		dialog.show();
-
-		// Print button
-		dialog.$wrapper.find('.btn-print-receipt').click(() => {
-			dialog.hide();
-			frappe.set_route('print', 'Sales Order', order_name);
-		});
-
-		// Email button  
-		// dialog.$wrapper.find('.btn-email-receipt').click(() => {
-		// 	dialog.hide();
-		// 	frappe.set_route('Form', 'Sales Order', order_name);
-		// 	setTimeout(() => {
-		// 		if (cur_frm) {
-		// 			cur_frm.email_doc();
-		// 		}
-		// 	}, 1000);
-		// });
-
-		// WhatsApp button
-		dialog.$wrapper.find('.btn-whatsapp-share').click(() => {
-			dialog.hide();
-			me.send_whatsapp(order_name);
-		});
-
-		// New order button
-		dialog.$wrapper.find('.btn-new-order').click(() => {
-			dialog.hide();
-			me.make_new_invoice();
-		});
-	}
-
-	send_whatsapp(order_name) {
-		const me = this;
-
-		// Get customer phone number
-		frappe.db.get_doc('Sales Order', order_name).then(doc => {
-			frappe.db.get_value('Customer', doc.customer, 'mobile_no').then(r => {
-				const phone = r.message.mobile_no;
-
-				if (!phone) {
-					frappe.msgprint(__('Customer does not have a mobile number'));
-					return;
-				}
-
-				// ---- Build the receipt print URL ----
-				// Example: http(s)://yourdomain.com/print/Sales%20Order/SAL-ORD-2025-00098?format=Standard&no_letterhead=1
-				const base_url = window.location.origin;
-				const receipt_url = `${base_url}/printview?doctype=Sales%20Order&name=${order_name}&format=Sales%20Order&no_letterhead=0&letterhead=Abitos`;
-
-				// ---- Build the WhatsApp message including the link ----
-				const message_template =
-					`Hello ${doc.customer},\n` +
-					`Your order ${order_name} has been confirmed.\n\n` +
-					`Order Total: ${format_currency(doc.grand_total, doc.currency)}\n\n` +
-					`View and download your receipt:\n${receipt_url}\n\n` +
-					`Thank you for your business!`;
-
-				// Show WhatsApp dialog (pre-fill message with the link)
-				const whatsapp_dialog = new frappe.ui.Dialog({
-					title: __('Share via WhatsApp'),
-					fields: [
-						{
-							fieldtype: 'Data',
-							fieldname: 'phone',
-							label: __('Phone Number'),
-							default: phone,
-							reqd: 1
-						},
-						{
-							fieldtype: 'Small Text',
-							fieldname: 'message',
-							label: __('Message'),
-							default: message_template,
-							reqd: 1
-						}
-					],
-					primary_action_label: __('Send WhatsApp'),
-					primary_action: function (values) {
-						// Clean phone number (remove spaces, dashes, etc)
-						let clean_phone = values.phone.replace(/[^0-9+]/g, '');
-
-						// WhatsApp needs URI-encoded message
-						const message = encodeURIComponent(values.message);
-						const whatsapp_url = `https://wa.me/${clean_phone}?text=${message}`;
-
-						// Open WhatsApp in new tab with the message
-						window.open(whatsapp_url, '_blank');
-
-						whatsapp_dialog.hide();
-
-						frappe.show_alert({
-							indicator: 'green',
-							message: __('WhatsApp opened successfully')
-						});
-					}
-				});
-
-				whatsapp_dialog.show();
-			});
 		});
 	}
 
@@ -654,8 +436,7 @@ posnext.PointOfSale.Controller = class {
 			wrapper: this.$components_wrapper,
 			events: {
 				open_invoice_data: (name) => {
-					// Always load as Sales Order since we only show Sales Orders
-					frappe.db.get_doc('Sales Order', name).then((doc) => {
+					frappe.db.get_doc('POS Invoice', name).then((doc) => {
 						this.order_summary.load_summary_of(doc);
 					});
 				},
@@ -664,10 +445,10 @@ posnext.PointOfSale.Controller = class {
 					this.recent_order_list.toggle_component(false);
 					this.cart.load_invoice()
 					this.item_selector.toggle_component(true)
-					this.wrapper.find('.past-order-summary').css("display", "none");
+					this.wrapper.find('.past-order-summary').css("display","none");
 				},
-			},
-			settings: this.settings,
+
+			}
 		})
 	}
 
@@ -680,7 +461,7 @@ posnext.PointOfSale.Controller = class {
 
 				process_return: (name) => {
 					this.recent_order_list.toggle_component(false);
-					frappe.db.get_doc('Sales Order', name).then((doc) => {
+					frappe.db.get_doc('POS Invoice', name).then((doc) => {
 						frappe.run_serially([
 							() => this.make_return_invoice(doc),
 							() => this.cart.load_invoice(),
@@ -689,7 +470,6 @@ posnext.PointOfSale.Controller = class {
 					});
 				},
 				edit_order: (name) => {
-					console.log("Edit Order...")
 					this.recent_order_list.toggle_component(false);
 					frappe.run_serially([
 						() => this.frm.refresh(name),
@@ -729,90 +509,47 @@ posnext.PointOfSale.Controller = class {
 		!show ? (this.item_details.toggle_component(false) || this.payment.toggle_component(false)) : '';
 	}
 
+	make_new_invoice(from_held=false) {
+		if(from_held){
+			return frappe.run_serially([
+				() => frappe.dom.freeze(),
+				() => this.make_sales_invoice_frm(),
+				() => this.set_pos_profile_data(),
+				() => this.set_pos_profile_status(),
+				() => this.cart.load_invoice(),
+				() => frappe.dom.unfreeze(),
+				() => this.toggle_recent_order(),
+			]);
+		} else {
+			return frappe.run_serially([
+				() => frappe.dom.freeze(),
+				() => this.make_sales_invoice_frm(),
+				() => this.set_pos_profile_data(),
+				() => this.set_pos_profile_status(),
+				() => this.cart.load_invoice(),
+				() => frappe.dom.unfreeze(),
+			]);
+		}
 
-	make_new_invoice(from_held = false) {
-		frappe.dom.freeze();
-		return frappe.run_serially([
-			() => this.make_sales_invoice_frm(),
-			() => this.set_pos_profile_data(),
-			() => this.set_pos_profile_status(),
-			() => this.cart.load_invoice(),
-			// Always try UI resets
-			() => {
-				try {
-					// UI reset: ensure only first step is visible
-					this.item_selector.toggle_component(true);
-					this.payment.toggle_component(false);
-					this.ordersummary.toggle_component(false);
-					this.item_details.toggle_component(false);
-				} catch (err) {
-					// Console log for debugging
-					console.error('POS UI reset error:', err);
-				}
-			}
-		]).finally(() => {
-			frappe.dom.unfreeze();
-			// As extra safety, remove any stuck #freeze overlays if still present
-			setTimeout(() => {
-				$('#freeze, .modal-backdrop, #freeze.in').remove();
-				$('body').css('opacity', 1);
-			}, 200);
-		});
 	}
 
-	// make_new_invoice(from_held=false) {
-	// 	if(from_held){
-	// 		return frappe.run_serially([
-	// 			() => frappe.dom.freeze(),
-	// 			() => this.make_sales_invoice_frm(),
-	// 			() => this.set_pos_profile_data(),
-	// 			() => this.set_pos_profile_status(),
-	// 			() => this.cart.load_invoice(),
-	// 			() => frappe.dom.unfreeze(),
-	// 			() => this.toggle_recent_order(),
-	// 		]);
-	// 	} else {
-	// 		return frappe.run_serially([
-	// 			() => frappe.dom.freeze(),
-	// 			() => this.make_sales_invoice_frm(),
-	// 			() => this.set_pos_profile_data(),
-	// 			() => this.set_pos_profile_status(),
-	// 			() => this.cart.load_invoice(),
-	// 			() => frappe.dom.unfreeze(),
-	// 		]);
-	// 	}
-
-	// }
-
 	make_sales_invoice_frm() {
-		const doctype = 'Sales Order';
+		const doctype = 'POS Invoice';
 		return new Promise(resolve => {
 			if (this.frm) {
 				this.frm = this.get_new_frm(this.frm);
 				this.frm.doc.items = [];
-				this.frm.doc.taxes = [];
-				this.frm.doc.custom_is_posnext = 1;
+				this.frm.doc.is_pos = 1
 				this.frm.doc.set_warehouse = this.settings.warehouse
-				this.frm.doc.transaction_date = frappe.datetime.get_today();
-				this.frm.doc.delivery_date = frappe.datetime.get_today();
-				// Set default custom_type from VAT type if available
-				if (this.item_selector && this.item_selector.vat_type) {
-					this.frm.doc.custom_type = this.item_selector.vat_type;
-				}
 				resolve();
 			} else {
 				frappe.model.with_doctype(doctype, () => {
 					this.frm = this.get_new_frm();
 					this.frm.doc.items = [];
-					this.frm.doc.taxes = [];
-					this.frm.doc.custom_is_posnext = 1;
+					this.frm.doc.is_pos = 1
 					this.frm.doc.set_warehouse = this.settings.warehouse
-					this.frm.doc.transaction_date = frappe.datetime.get_today();
-					this.frm.doc.delivery_date = frappe.datetime.get_today();
-					// Set default custom_type from VAT type if available
-					if (this.item_selector && this.item_selector.vat_type) {
-						this.frm.doc.custom_type = this.item_selector.vat_type;
-					}
+					console.log("THIS FRRRRM")
+					console.log(this.frm.doc)
 					resolve();
 				});
 			}
@@ -820,12 +557,11 @@ posnext.PointOfSale.Controller = class {
 	}
 
 	get_new_frm(_frm) {
-		const doctype = 'Sales Order';
+		const doctype = 'POS Invoice';
 		const page = $('<div>');
 		const frm = _frm || new frappe.ui.form.Form(doctype, page, false);
 		const name = frappe.model.make_new_doc_and_get_name(doctype, true);
 		frm.refresh(name);
-		frm.doc.custom_is_posnext = 1;
 
 		return frm;
 	}
@@ -835,13 +571,12 @@ posnext.PointOfSale.Controller = class {
 		this.frm = this.get_new_frm(this.frm);
 		this.frm.doc.items = [];
 		return frappe.call({
-			method: "posnext.posnext.page.posnext.point_of_sale.make_sales_return",
+			method: "erpnext.accounts.doctype.pos_invoice.pos_invoice.make_sales_return",
 			args: {
 				'source_name': doc.name,
 				'target_doc': this.frm.doc
 			},
 			callback: (r) => {
-				// console.log(r.message)
 				frappe.model.sync(r.message);
 				frappe.get_doc(r.message.doctype, r.message.name).__run_link_triggers = false;
 				this.set_pos_profile_data().then(() => {
@@ -859,17 +594,7 @@ posnext.PointOfSale.Controller = class {
 
 		if (!this.frm.doc.company) return;
 
-		return this.frm.trigger("set_pos_data").then(() => {
-			// Set custom_type from VAT type selection
-			if (this.item_selector && this.item_selector.vat_type) {
-				this.frm.doc.custom_type = this.item_selector.vat_type;
-			}
-			
-			// After POS data is set, update VAT based on VAT type selection
-			if (this.item_selector && this.item_selector.update_vat_on_sales_order) {
-				this.item_selector.update_vat_on_sales_order();
-			}
-		});
+		return this.frm.trigger("set_pos_data");
 	}
 
 	set_pos_profile_status() {
@@ -877,8 +602,7 @@ posnext.PointOfSale.Controller = class {
 	}
 
 	async on_cart_update(args) {
-		// frappe.dom.freeze();
-		console.log("Updating Cart")
+		frappe.dom.freeze();
 		let item_row = undefined;
 		try {
 			let { field, value, item } = args;
@@ -895,46 +619,26 @@ posnext.PointOfSale.Controller = class {
 
 				if (['qty', 'conversion_factor'].includes(field) && value > 0 && !this.allow_negative_stock) {
 					const qty_needed = field === 'qty' ? value * item_row.conversion_factor : item_row.qty * value;
-					// await this.check_stock_availability(item_row, qty_needed, this.frm.doc.set_warehouse);
+					await this.check_stock_availability(item_row, qty_needed, this.frm.doc.set_warehouse);
 				}
 
-			if (this.is_current_item_being_edited(item_row) || from_selector) {
-				await frappe.model.set_value(item_row.doctype, item_row.name, field, value)
-				this.update_cart_html(item_row);
-			}
+				if (this.is_current_item_being_edited(item_row) || from_selector) {
+					await frappe.model.set_value(item_row.doctype, item_row.name, field, value);
+					this.update_cart_html(item_row);
+				}
 
 			} else {
-				if (!this.frm.doc.customer && !this.settings.custom_mobile_number_based_customer) {
+				if (!this.frm.doc.customer && !this.settings.custom_mobile_number_based_customer){
 					return this.raise_customer_selection_alert();
 				}
 				frappe.flags.ignore_company_party_validation = true
-				const { item_code, batch_no, serial_no, rate, uom, valuation_rate, custom_item_uoms, custom_logical_rack } = item;
+				const { item_code, batch_no, serial_no, rate, uom } = item;
+
 				if (!item_code)
 					return;
 
-				if (this.settings.custom_product_bundle) {
-					const product_bundle = await this.get_product_bundle(item_code);
-					if (product_bundle && Array.isArray(product_bundle.items)) {
-						const bundle_items = product_bundle.items.map(bundle_item => ({
-							item_code: bundle_item.item_code,
-							qty: bundle_item.qty * value,
-							rate: bundle_item.rate,
-							uom: bundle_item.uom,
-							custom_bundle_id: product_bundle.name
-						}));
-
-						for (const bundle_item of bundle_items) {
-							const bundle_item_row = this.frm.add_child('items', bundle_item);
-							await this.trigger_new_item_events(bundle_item_row);
-						}
-
-						this.update_cart_html();
-						return;
-					}
-				}
-
 				const new_item = { item_code, batch_no, rate, uom, [field]: value };
-				if (value) {
+				if(value){
 					new_item['qty'] = value
 				}
 				if (serial_no) {
@@ -944,41 +648,32 @@ posnext.PointOfSale.Controller = class {
 
 				if (field === 'serial_no')
 					new_item['qty'] = value.split(`\n`).length || 0;
+
 				item_row = this.frm.add_child('items', new_item);
 
-			await this.trigger_new_item_events(item_row);
-			// item_row['rate'] = rate
-			// item_row['valuation_rate'] = valuation_rate;
-			// item_row['custom_valuation_rate'] = valuation_rate;
-			item_row['custom_item_uoms'] = custom_item_uoms;
-			item_row['custom_logical_rack'] = custom_logical_rack;
-			this.update_cart_html(item_row);
-			if (this.item_details.$component.is(':visible'))
-				this.edit_item_details_of(item_row);
+				if (field === 'qty' && value !== 0 && !this.allow_negative_stock) {
+					const qty_needed = value * item_row.conversion_factor;
+					await this.check_stock_availability(item_row, qty_needed, this.frm.doc.set_warehouse);
+				}
+
+				await this.trigger_new_item_events(item_row);
+
+				this.update_cart_html(item_row);
+
+				if (this.item_details.$component.is(':visible'))
+					this.edit_item_details_of(item_row);
 
 				if (this.check_serial_batch_selection_needed(item_row) && !this.item_details.$component.is(':visible'))
 					this.edit_item_details_of(item_row);
 			}
 
-	} catch (error) {
-		console.log(error);
-	} finally {
-		// frappe.dom.unfreeze();
-
-		var total_incoming_rate = 0
-		this.frm.doc.items.forEach(item => {
-			total_incoming_rate += (parseFloat(item.valuation_rate) * item.qty)
-		});
-		this.item_selector.update_total_incoming_rate(total_incoming_rate)
-		
-		// Always update totals section after cart changes
-		if (this.cart) {
-			this.cart.update_totals_section(this.frm);
+		} catch (error) {
+			console.log(error);
+		} finally {
+			frappe.dom.unfreeze();
+			return item_row; // eslint-disable-line no-unsafe-finally
 		}
-
-		return item_row; // eslint-disable-line no-unsafe-finally
 	}
-}
 
 	raise_customer_selection_alert() {
 		frappe.dom.unfreeze();
@@ -987,15 +682,6 @@ posnext.PointOfSale.Controller = class {
 			indicator: 'orange'
 		});
 		frappe.utils.play_sound("error");
-	}
-	async get_product_bundle(item_code) {
-		const response = await frappe.call({
-			method: "posnext.doc_events.item.get_product_bundle_with_items",
-			args: {
-				item_code: item_code
-			}
-		});
-		return response.message;
 	}
 
 	get_item_from_frm({ name, item_code, batch_no, uom, rate }) {
@@ -1007,27 +693,16 @@ posnext.PointOfSale.Controller = class {
 			// if item is clicked twice from item selector
 			// then "item_code, batch_no, uom, rate" will help in getting the exact item
 			// to increase the qty by one
-			for (var i = 0; i < cur_frm.doc.items.length; i += 1) {
-				const has_batch_no = (batch_no !== 'null' && batch_no !== null);
-				const batch_no_check = this.settings.custom_allow_add_new_items_on_new_line
-					? (has_batch_no && cur_frm.doc.items[i].batch_no === batch_no)
-					: true;
-
-				if (
-					cur_frm.doc.items[i].item_code === item_code &&
-					cur_frm.doc.items[i].uom === uom &&
-					parseFloat(cur_frm.doc.items[i].rate) === parseFloat(rate) &&
-					batch_no_check
-				) {
-					item_row = cur_frm.doc.items[i];
-					break;
-				}
-			}
-			console.log(item_row);
+			const has_batch_no = (batch_no !== 'null' && batch_no !== null);
+			item_row = this.frm.doc.items.find(
+				i => i.item_code === item_code
+					&& (has_batch_no && i.batch_no === batch_no)
+					&& (i.uom === uom)
+					&& (i.rate === flt(rate))
+			);
 		}
 		return item_row || {};
 	}
-
 
 	edit_item_details_of(item_row) {
 		this.item_details.toggle_item_details_section(item_row);
@@ -1039,9 +714,7 @@ posnext.PointOfSale.Controller = class {
 
 	update_cart_html(item_row, remove_item) {
 		this.cart.update_item_html(item_row, remove_item);
-
 		this.cart.update_totals_section(this.frm);
-
 	}
 
 	check_serial_batch_selection_needed(item_row) {
@@ -1062,7 +735,6 @@ posnext.PointOfSale.Controller = class {
 	async trigger_new_item_events(item_row) {
 		await this.frm.script_manager.trigger('item_code', item_row.doctype, item_row.name);
 		await this.frm.script_manager.trigger('qty', item_row.doctype, item_row.name);
-		await this.frm.script_manager.trigger('discount_percentage', item_row.doctype, item_row.name);
 	}
 
 	async check_stock_availability(item_row, qty_needed, warehouse) {
@@ -1071,6 +743,7 @@ posnext.PointOfSale.Controller = class {
 		const is_stock_item = resp[1];
 
 		frappe.dom.unfreeze();
+		console.log(item_row)
 		const bold_uom = item_row.uom.bold();
 		const bold_item_code = item_row.item_code.bold();
 		const bold_warehouse = warehouse.bold();
@@ -1097,13 +770,13 @@ posnext.PointOfSale.Controller = class {
 
 	async check_serial_no_availablilty(item_code, warehouse, serial_no) {
 		const method = "erpnext.stock.doctype.serial_no.serial_no.get_pos_reserved_serial_nos";
-		const args = { filters: { item_code, warehouse } }
+		const args = {filters: { item_code, warehouse }}
 		const res = await frappe.call({ method, args });
 
 		if (res.message.includes(serial_no)) {
 			frappe.throw({
 				title: __("Not Available"),
-				message: __('Serial No: {0} has already been transacted into another Sales Invoice.', [serial_no.bold()])
+				message: __('Serial No: {0} has already been transacted into another POS Invoice.', [serial_no.bold()])
 			});
 		}
 	}
@@ -1140,173 +813,29 @@ posnext.PointOfSale.Controller = class {
 	remove_item_from_cart() {
 		frappe.dom.freeze();
 		const { doctype, name, current_item } = this.item_details;
+
 		return frappe.model.set_value(doctype, name, 'qty', 0)
 			.then(() => {
 				frappe.model.clear_doc(doctype, name);
 				this.update_cart_html(current_item, true);
 				this.item_details.toggle_item_details_section(null);
 				frappe.dom.unfreeze();
-
-				var total_incoming_rate = 0
-				this.frm.doc.items.forEach(item => {
-					total_incoming_rate += (parseFloat(item.valuation_rate) * item.qty)
-				});
-				this.item_selector.update_total_incoming_rate(total_incoming_rate)
 			})
 			.catch(e => console.log(e));
 	}
 
 	async save_and_checkout() {
-		if (!this.frm.doc.items || this.frm.doc.items.length === 0) {
-			frappe.show_alert({
-				message: __('Please add items to cart before checkout.'),
-				indicator: 'red'
-			});
-			frappe.utils.play_sound("error");
-			return;
-		}
-
 		if (this.frm.is_dirty()) {
-			if (this.settings.custom_add_reference_details) {
-				const dialog = new frappe.ui.Dialog({
-					title: __('Enter Reference Details'),
-					fields: [
-						{
-							fieldtype: 'Data',
-							label: __('Reference Number'),
-							fieldname: 'reference_no',
-						},
-						{
-							fieldtype: 'Data',
-							label: __('Reference Name'),
-							fieldname: 'reference_name',
-						}
-					],
-					primary_action_label: __('Proceed to Checkout'),
-					primary_action: async (values) => {
-						this.frm.doc.custom_reference_no = values.reference_no;
-						this.frm.doc.custom_reference_name = values.reference_name;
-
-						const div = document.getElementById("customer-cart-container2");
-						if (div) div.style.gridColumn = "";
-
-						let save_error = false;
-						await this.frm.save(null, null, null, () => save_error = true);
-
-						dialog.hide();
-
-						if (!save_error) {
-							this.payment.checkout();
-						} else {
-							setTimeout(() => {
-								this.cart.toggle_checkout_btn(true);
-							}, 300);
-						}
-					}
-				});
-				dialog.show();
-			} else {
-				const div = document.getElementById("customer-cart-container2");
-				if (div) div.style.gridColumn = "";
-
-				let save_error = false;
-				await this.frm.save(null, null, null, () => save_error = true);
-
-				if (!save_error) {
-					this.payment.checkout();
-				} else {
-					setTimeout(() => {
-						this.cart.toggle_checkout_btn(true);
-					}, 300);
-				}
-			}
+			let save_error = false;
+			await this.frm.save(null, null, null, () => save_error = true);
+			// only move to payment section if save is successful
+			!save_error && this.payment.checkout();
+			// show checkout button on error
+			save_error && setTimeout(() => {
+				this.cart.toggle_checkout_btn(true);
+			}, 300); // wait for save to finish
 		} else {
 			this.payment.checkout();
-		}
-	}
-
-	async submit_sales_order_directly() {
-		try {
-			// Save first if dirty
-			if (this.frm.is_dirty()) {
-				await this.frm.save();
-			}
-
-			// Get current logged-in user and set sales person
-			const current_user = frappe.session.user;
-			console.log("Current user:", current_user);
-
-			// Find Sales Person with custom_user matching current user
-			const sales_person_response = await frappe.call({
-				method: 'frappe.client.get_list',
-				args: {
-					doctype: 'Sales Person',
-					filters: {
-						'custom_user': current_user
-					},
-					fields: ['name'],
-					limit: 1
-				}
-			});
-
-			if (sales_person_response.message && sales_person_response.message.length > 0) {
-				const sales_person_name = sales_person_response.message[0].name;
-				console.log("Found Sales Person:", sales_person_name);
-
-				// Set custom_sales_person field in Sales Order
-				this.frm.doc.custom_sales_person = sales_person_name;
-
-				// Clear existing sales_team and add new entry
-				this.frm.clear_table("sales_team");
-				this.frm.add_child("sales_team", {
-					sales_person: sales_person_name,
-					allocated_percentage: 100
-				});
-
-				console.log("Sales person set in sales_team and custom_sales_person");
-			} else {
-				console.log("No Sales Person found for user:", current_user);
-			}
-
-			// Submit
-			await this.frm.savesubmit();
-
-			// Reload doc
-			await this.frm.reload_doc();
-
-			// IMPORTANT: Hide all components FIRST
-			this.toggle_components(false);
-
-			// IMPORTANT: Show and initialize summary component BEFORE loading data
-			console.log("Showing order summary component...");
-			this.order_summary.toggle_component(true);
-
-			// Wait a bit for DOM to be ready
-			await new Promise(resolve => setTimeout(resolve, 100));
-
-			// Now load the data
-			console.log("Loading summary data...");
-			this.order_summary.load_summary_of(this.frm.doc, true);
-
-			// Success message
-			frappe.show_alert({
-				indicator: 'green',
-				message: __('Sales Order {0} created successfully', [this.frm.doc.name])
-			});
-
-		} catch (error) {
-			console.error('Error submitting sales order:', error);
-
-			if (error && error.message && !error.message.includes('Not permitted')) {
-				frappe.show_alert({
-					indicator: 'red',
-					message: __('Error: {0}', [error.message])
-				});
-			}
-
-			setTimeout(() => {
-				this.cart.toggle_checkout_btn(true);
-			}, 300);
 		}
 	}
 };

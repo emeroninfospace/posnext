@@ -226,7 +226,7 @@ posnext.PointOfSale.ItemSelector = class {
 		!item_group && (item_group = this.parent_item_group);
 
 		return frappe.call({
-			method: "posnext.posnext.page.posnext.point_of_sale.get_items",
+			method: "erpnext.selling.page.point_of_sale.point_of_sale.get_items",
 			freeze: true,
 			args: { start, page_length, price_list, item_group, search_term, pos_profile },
 		});
@@ -234,18 +234,18 @@ posnext.PointOfSale.ItemSelector = class {
 
 
 	render_item_list(items) {
-		this.$items_container.html('');
-		var me = this
+		var  me  = this
 		if(view === "List"){
+		this.$items_container.html('');
 			this.$items_container.append(
 				`<div class="abs-cart-container" style="overflow-y:hidden">
 					<div class="cart-header">
 					${get_item_code_header()}
 						<div style="flex: 1">${__('Rate')}</div>
-						<div style="flex: 1">${__('Avail. Qty')}</div>
-						<!--<div class="qty-header">${__('UOM')}</div>-->
+						<div style="flex: 1">${__('Available Qty')}</div>
+						<div class="qty-header">${__('UOM')}</div>
 					</div>
-					<div class="cart-items-section" style="overflow-y:scroll;font-size: 12px"></div>
+					<div class="cart-items-section" style="overflow-y:hidden"></div>
 				</div>`)
 
 			function get_item_code_header() {
@@ -275,13 +275,13 @@ posnext.PointOfSale.ItemSelector = class {
 				} else {
 					return `<div>${__('Item')}</div>` + html_header
 				}
-
-
             }
 			this.make_cart_items_section();
-
 			items.forEach(item => {
+
 				this.render_cart_item(item);
+
+				// this.$items_container.append(item_html);
 			});
 		} else {
 			items.forEach(item => {
@@ -308,6 +308,7 @@ posnext.PointOfSale.ItemSelector = class {
 		return this.$cart_items_wrapper.find(item_selector);
 	}
 	render_cart_item(item_data) {
+
 		const me = this;
 		const currency = me.events.get_frm().currency || me.currency;
 		this.$cart_items_wrapper.append(
@@ -317,22 +318,19 @@ posnext.PointOfSale.ItemSelector = class {
 			data-batch-no="${escape(item_data.batch_no)}" 
 			data-uom="${escape(item_data.uom)}"
 			data-rate="${escape(item_data.price_list_rate || 0)}"
-			data-valuation-rate="${escape(item_data.valuation_rate || item_data.custom_valuation_rate)}"
-			data-item-uoms="${item_data.custom_item_uoms}"
-			data-item-logical-rack="${item_data.custom_logical_rack}"
 			title="${item_data.item_name}"
 			data-row-name="${escape(item_data.item_code)}"></div>
 			<div class="seperator"></div>`
 		)
 		var $item_to_update = this.get_cart_item1(item_data);
+
 		$item_to_update.html(
 			`${get_item_image_html()}
 			${get_item_name()}
-			
-				<div style="overflow-wrap: break-word;overflow:hidden;white-space: normal;font-weight: 700;margin-right: 10px">
+				<div class="item-name" >
 					${item_data.item_name}
 				</div>
-				${get_description_html(item_data)}
+				${get_description_html()}
 			</div>
 			${get_item_code()}
 			${get_rate_discount_html()}`
@@ -433,9 +431,8 @@ posnext.PointOfSale.ItemSelector = class {
 			}
 		}
 
-		function get_description_html(item_data) {
-			
-			if (me.custom_show_item_discription) {
+		function get_description_html() {
+			if (item_data.description) {
 				if (item_data.description.indexOf('<div>') != -1) {
 					try {
 						item_data.description = $(item_data.description).text();
@@ -467,7 +464,7 @@ posnext.PointOfSale.ItemSelector = class {
 		const me = this;
 		item.currency = item.currency  || me.currency
 		// eslint-disable-next-line no-unused-vars
-		const { item_image, serial_no, batch_no, barcode, actual_qty, uom, price_list_rate, custom_is_promo } = item;
+		const { item_image, serial_no, batch_no, barcode, actual_qty, uom, price_list_rate } = item;
 		const precision = flt(price_list_rate, 2) % 1 != 0 ? 2 : 0;
 		let indicator_color;
 		let qty_to_display = actual_qty;
@@ -484,29 +481,12 @@ posnext.PointOfSale.ItemSelector = class {
 			qty_to_display = '';
 		}
 
-		function get_promotional_badge() {
-			if (custom_is_promo) {
-				return `<div class="promotional-badge" style="position: absolute; left: 0; top: 0; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 6px 12px; border-radius: 0 0 12px 0; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); z-index: 10; white-space: nowrap; transform: translateY(0);">
-							${__('Promo')}
-						</div>`;
-			}
-			return '';
-		}
-
-		function get_quantity_indicator() {
-			if (item.is_stock_item && qty_to_display !== '') {
-				return `<div class="item-qty-pill" style="position: absolute; right: 8px; top: 8px; z-index: 10;">
-							<span class="indicator-pill whitespace-nowrap ${indicator_color}">${qty_to_display}</span>
-						</div>`;
-			}
-			return '';
-		}
-
 		function get_item_image_html() {
 			if (!me.hide_images && item_image) {
-				return `<div class="flex items-center justify-center h-32 border-b-grey text-6xl text-grey-100" style="position: relative;">
-							${get_promotional_badge()}
-							${get_quantity_indicator()}
+				return `<div class="item-qty-pill">
+							<span class="indicator-pill whitespace-nowrap ${indicator_color}">${qty_to_display}</span>
+						</div>
+						<div class="flex items-center justify-center h-32 border-b-grey text-6xl text-grey-100">
 							<img
 								onerror="cur_pos.item_selector.handle_broken_image(this)"
 								class="h-full item-img" src="${item_image}"
@@ -514,11 +494,10 @@ posnext.PointOfSale.ItemSelector = class {
 							>
 						</div>`;
 			} else {
-				return `<div class="item-display abbr" style="position: relative;">
-							${get_promotional_badge()}
-							${get_quantity_indicator()}
-							${frappe.get_abbr(item.item_name)}
-						</div>`;
+				return `<div class="item-qty-pill">
+							<span class="indicator-pill whitespace-nowrap ${indicator_color}">${qty_to_display}</span>
+						</div>
+						<div class="item-display abbr">${frappe.get_abbr(item.item_name)}</div>`;
 			}
 		}
 
@@ -595,7 +574,6 @@ posnext.PointOfSale.ItemSelector = class {
 			parent: this.$component.find('.search-field'),
 			render_input: true,
 		});
-
 		this.item_group_field = frappe.ui.form.make_control({
 			df: {
 				label: __('Item Group'),
@@ -609,7 +587,7 @@ posnext.PointOfSale.ItemSelector = class {
 				},
 				get_query: function () {
 					return {
-						query: 'posnext.posnext.page.posnext.point_of_sale.item_group_query',
+						query: 'erpnext.selling.page.point_of_sale.point_of_sale.item_group_query',
 						filters: {
 							pos_profile: doc ? doc.pos_profile : ''
 						}
@@ -625,9 +603,9 @@ posnext.PointOfSale.ItemSelector = class {
 			df: {
 				label: __('Vat Type'),
 				fieldtype: 'Select',
-				options: '\nShop Sales\nExport Sales',
+				options: '\nTax\nWithout Tax',
 				placeholder: __('Select Vat Type'),
-				default: 'Shop Sales',
+				default: 'Tax',
 				onchange: function() {
 					me.vat_type = this.value;
 					me.update_vat_on_sales_order();
@@ -636,8 +614,8 @@ posnext.PointOfSale.ItemSelector = class {
 			parent: this.$component.find('.vat-type-field'),
 			render_input: true,
 		});
-		this.vat_type = 'Shop Sales'; // Default value
-		this.vat_type_field.set_value('Shop Sales');
+		this.vat_type = 'Tax'; // Default value
+		this.vat_type_field.set_value('Tax');
 		if(this.custom_show_last_incoming_rate || this.custom_show_incoming_rate) {
             this.total_incoming_rate = frappe.ui.form.make_control({
                 df: {
@@ -688,18 +666,16 @@ posnext.PointOfSale.ItemSelector = class {
 		const frm = me.events.get_frm();
 		if (!frm || !frm.doc) return;
 
-		// Store VAT type in window for access from sales_order.js
 		if (window.cur_pos) {
 			window.cur_pos.item_selector = me;
 		}
 
 		// Set custom_type field in sales order
-		if (frm.doc && frm.doc.doctype === 'Sales Order') {
+		if (frm.doc && frm.doc.doctype === 'POS Invoice') {
 			frm.set_value('custom_type', me.vat_type);
 		}
 
-		if (me.vat_type === 'Shop Sales') {
-			// Apply VAT 5% - get taxes_and_charges from POS Profile
+		if (me.vat_type === 'Tax') {
 			if (frm.doc.pos_profile) {
 				frappe.db.get_doc('POS Profile', frm.doc.pos_profile).then(pos_profile => {
 					if (pos_profile.taxes_and_charges) {
@@ -708,7 +684,7 @@ posnext.PointOfSale.ItemSelector = class {
 					}
 				});
 			}
-		} else if (me.vat_type === 'Export Sales') {
+		} else if (me.vat_type === 'Without Tax') {
 			// Remove VAT - clear taxes_and_charges
 			frm.set_value('taxes_and_charges', '');
 			frm.clear_table('taxes');
@@ -889,6 +865,7 @@ posnext.PointOfSale.ItemSelector = class {
 
 		this.get_items({ search_term })
 			.then(({ message }) => {
+				// eslint-disable-next-line no-unused-vars
 				const { items, serial_no, batch_no, barcode } = message;
 				if (search_term && !barcode) {
 					this.search_index[search_term] = items;

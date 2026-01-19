@@ -24,7 +24,7 @@
   var selected_item = null;
   posnext.PointOfSale.Controller = class {
     constructor(wrapper) {
-      console.log("CONTROLLLLLERE");
+      console.log("CONTROLLLER HERE ssssssadasdasd");
       this.wrapper = $(wrapper).find(".layout-main-section");
       this.page = wrapper.page;
       frappe.run_serially([
@@ -32,20 +32,6 @@
         () => this.check_opening_entry(""),
         () => this.reload_status = true
       ]);
-      this.setup_form_events();
-    }
-    setup_form_events() {
-      frappe.ui.form.on("Sales Order", {
-        after_save: function(frm) {
-          if (!frm.doc.pos_profile)
-            return;
-          frappe.db.get_doc("POS Profile", frm.doc.pos_profile).then((pos_profile) => {
-            if (pos_profile.custom_stock_update) {
-              frm.set_value("update_stock", 0);
-            }
-          });
-        }
-      });
     }
     fetch_opening_entry(value) {
       return frappe.call("posnext.posnext.page.posnext.point_of_sale.check_opening_entry", { "user": frappe.session.user, "value": value });
@@ -233,7 +219,6 @@
     save_draft_invoice() {
       if (!this.$components_wrapper.is(":visible"))
         return;
-      console.log(this.frm.doc.items);
       if (this.frm.doc.items.length == 0) {
         frappe.show_alert({
           message: __("You must add atleast one item to save it as draft."),
@@ -251,7 +236,7 @@
       }).then(() => {
         frappe.run_serially([
           () => frappe.dom.freeze(),
-          () => this.make_new_invoice(false),
+          () => this.make_new_invoice(true),
           () => frappe.dom.unfreeze()
         ]);
       });
@@ -300,36 +285,16 @@
         settings: this.settings,
         events: {
           get_frm: () => this.frm,
-          remove_item_from_cart: (item) => {
-            this.item_details.current_item = item;
-            this.item_details.name = item.name;
-            this.item_details.doctype = item.doctype;
-          },
-          form_updated: (item, field, value) => {
-            this.item_details.current_item = item;
-            const item_row = frappe.model.get_doc(item.doctype, item.name);
-            if (field === "qty" && this.frm.doc.is_return && value >= 0) {
-              frappe.throw("Qty must be negative for return document");
-            }
-            if (item_row && item_row[field] != value) {
-              const args = {
-                field,
-                value,
-                item: this.item_details.current_item
-              };
-              return this.on_cart_update(args);
-            }
-            return Promise.resolve();
-          },
           cart_item_clicked: (item) => {
+            console.log("ITEEEEEEEM");
+            console.log(item);
             const item_row = this.get_item_from_frm(item);
             if (selected_item && selected_item["name"] == item["name"]) {
               selected_item = null;
-              this.item_details.toggle_item_details_section(null);
             } else {
               selected_item = item_row;
-              this.item_details.toggle_item_details_section(item_row);
             }
+            this.item_details.toggle_item_details_section(item_row);
           },
           numpad_event: (value, action) => this.update_item_field(value, action),
           checkout: () => this.save_and_checkout(),
@@ -355,9 +320,6 @@
           },
           form_updated: (item, field, value) => {
             const item_row = frappe.model.get_doc(item.doctype, item.name);
-            if (field === "qty" && this.frm.doc.is_return && value >= 0) {
-              frappe.throw("Qty must be negative for return document");
-            }
             if (item_row && item_row[field] != value) {
               const args = {
                 field,
@@ -411,7 +373,6 @@
     init_payments() {
       this.payment = new posnext.PointOfSale.Payment({
         wrapper: this.$components_wrapper,
-        settings: this.settings,
         events: {
           get_frm: () => this.frm || {},
           get_customer_details: () => this.customer_details || {},
@@ -423,154 +384,18 @@
               this.item_selector.toggle_component(true);
             }
           },
-          show_edit_cart_btn: () => {
-            this.cart.toggle_checkout_btn(false);
-          },
-          submit_invoice: async () => {
-            console.log("Submit button clicked");
-            try {
-              const current_user = frappe.session.user;
-              console.log("Current user:", current_user);
-              const sales_person_response = await frappe.call({
-                method: "frappe.client.get_list",
-                args: {
-                  doctype: "Sales Person",
-                  filters: {
-                    "custom_user": current_user
-                  },
-                  fields: ["name"],
-                  limit: 1
-                }
-              });
-              if (sales_person_response.message && sales_person_response.message.length > 0) {
-                const sales_person_name = sales_person_response.message[0].name;
-                console.log("Found Sales Person:", sales_person_name);
-                this.frm.doc.custom_sales_person = sales_person_name;
-                this.frm.clear_table("sales_team");
-                this.frm.add_child("sales_team", {
-                  sales_person: sales_person_name,
-                  allocated_percentage: 100
-                });
-                console.log("Sales person set in sales_team and custom_sales_person");
-              } else {
-                console.log("No Sales Person found for user:", current_user);
-              }
-              const r = await this.frm.savesubmit();
-              console.log("Submit successful:", r);
-              this.payment.toggle_component(false);
+          submit_invoice: () => {
+            this.frm.savesubmit().then((r) => {
+              this.toggle_components(false);
+              this.order_summary.toggle_component(true);
+              this.order_summary.load_summary_of(this.frm.doc, true);
               frappe.show_alert({
                 indicator: "green",
-                message: __("Sales Order {0} created successfully", [r.doc.name])
+                message: __("POS invoice {0} created succesfully", [r.doc.name])
               });
-              this.show_receipt_dialog(r.doc.name);
-            } catch (error) {
-              console.error("Submit error:", error);
-              frappe.msgprint(__("Error: {0}", [error.message || "Unknown error"]));
-            }
+            });
           }
         }
-      });
-    }
-    show_receipt_dialog(order_name) {
-      const me = this;
-      const dialog = new frappe.ui.Dialog({
-        title: __("Order Submitted Successfully"),
-        fields: [
-          {
-            fieldtype: "HTML",
-            options: `
-                    <div style="text-align: center; padding: 30px;">
-                        <div style="font-size: 64px; color: #28a745; margin-bottom: 20px;">
-                            \u2713
-                        </div>
-                        <h3 style="margin-bottom: 10px;">${__("Sales Order {0} Created", [order_name])}</h3>
-                        
-                        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 40px;">
-                            <button class="btn btn-primary btn-lg btn-print-receipt" style="padding: 15px 40px;">
-                                <i class="fa fa-print"></i> ${__("Print Receipt")}
-                            </button>
-                            <!--<button class="btn btn-default btn-lg btn-email-receipt" style="padding: 15px 40px;">
-                                <i class="fa fa-envelope"></i> ${__("Email Receipt")}
-                            </button>-->
-                            <button class="btn btn-success btn-lg btn-whatsapp-share" style="padding: 15px 40px; background: #25D366; border-color: #25D366; color: white;">
-                                <i class="fa fa-whatsapp"></i> ${__("WhatsApp Share")}
-                            </button>
-                            <button class="btn btn-info btn-lg btn-new-order" style="padding: 15px 40px;">
-                                <i class="fa fa-plus"></i> ${__("New Order")}
-                            </button>
-                        </div>
-                    </div>
-                `
-          }
-        ]
-      });
-      dialog.show();
-      dialog.$wrapper.find(".btn-print-receipt").click(() => {
-        dialog.hide();
-        frappe.set_route("print", "Sales Order", order_name);
-      });
-      dialog.$wrapper.find(".btn-whatsapp-share").click(() => {
-        dialog.hide();
-        me.send_whatsapp(order_name);
-      });
-      dialog.$wrapper.find(".btn-new-order").click(() => {
-        dialog.hide();
-        me.make_new_invoice();
-      });
-    }
-    send_whatsapp(order_name) {
-      const me = this;
-      frappe.db.get_doc("Sales Order", order_name).then((doc) => {
-        frappe.db.get_value("Customer", doc.customer, "mobile_no").then((r) => {
-          const phone = r.message.mobile_no;
-          if (!phone) {
-            frappe.msgprint(__("Customer does not have a mobile number"));
-            return;
-          }
-          const base_url = window.location.origin;
-          const receipt_url = `${base_url}/printview?doctype=Sales%20Order&name=${order_name}&format=Sales%20Order&no_letterhead=0&letterhead=Abitos`;
-          const message_template = `Hello ${doc.customer},
-Your order ${order_name} has been confirmed.
-
-Order Total: ${format_currency(doc.grand_total, doc.currency)}
-
-View and download your receipt:
-${receipt_url}
-
-Thank you for your business!`;
-          const whatsapp_dialog = new frappe.ui.Dialog({
-            title: __("Share via WhatsApp"),
-            fields: [
-              {
-                fieldtype: "Data",
-                fieldname: "phone",
-                label: __("Phone Number"),
-                default: phone,
-                reqd: 1
-              },
-              {
-                fieldtype: "Small Text",
-                fieldname: "message",
-                label: __("Message"),
-                default: message_template,
-                reqd: 1
-              }
-            ],
-            primary_action_label: __("Send WhatsApp"),
-            primary_action: function(values) {
-              let clean_phone = values.phone.replace(/[^0-9+]/g, "");
-              const message = encodeURIComponent(values.message);
-              const whatsapp_url = `https://wa.me/${clean_phone}?text=${message}`;
-              window.open(whatsapp_url, "_blank");
-              whatsapp_dialog.hide();
-              frappe.show_alert({
-                indicator: "green",
-                message: __("WhatsApp opened successfully")
-              });
-            }
-          });
-          whatsapp_dialog.show();
-        });
       });
     }
     init_recent_order_list() {
@@ -578,7 +403,7 @@ Thank you for your business!`;
         wrapper: this.$components_wrapper,
         events: {
           open_invoice_data: (name) => {
-            frappe.db.get_doc("Sales Order", name).then((doc) => {
+            frappe.db.get_doc("POS Invoice", name).then((doc) => {
               this.order_summary.load_summary_of(doc);
             });
           },
@@ -589,8 +414,7 @@ Thank you for your business!`;
             this.item_selector.toggle_component(true);
             this.wrapper.find(".past-order-summary").css("display", "none");
           }
-        },
-        settings: this.settings
+        }
       });
     }
     init_order_summary() {
@@ -601,7 +425,7 @@ Thank you for your business!`;
           get_frm: () => this.frm,
           process_return: (name) => {
             this.recent_order_list.toggle_component(false);
-            frappe.db.get_doc("Sales Order", name).then((doc) => {
+            frappe.db.get_doc("POS Invoice", name).then((doc) => {
               frappe.run_serially([
                 () => this.make_return_invoice(doc),
                 () => this.cart.load_invoice(),
@@ -610,7 +434,6 @@ Thank you for your business!`;
             });
           },
           edit_order: (name) => {
-            console.log("Edit Order...");
             this.recent_order_list.toggle_component(false);
             frappe.run_serially([
               () => this.frm.refresh(name),
@@ -646,63 +469,55 @@ Thank you for your business!`;
       !show ? this.item_details.toggle_component(false) || this.payment.toggle_component(false) : "";
     }
     make_new_invoice(from_held = false) {
-      frappe.dom.freeze();
-      return frappe.run_serially([
-        () => this.make_sales_invoice_frm(),
-        () => this.set_pos_profile_data(),
-        () => this.set_pos_profile_status(),
-        () => this.cart.load_invoice(),
-        () => {
-          try {
-            this.item_selector.toggle_component(true);
-            this.payment.toggle_component(false);
-            this.ordersummary.toggle_component(false);
-            this.item_details.toggle_component(false);
-          } catch (err) {
-            console.error("POS UI reset error:", err);
-          }
-        }
-      ]).finally(() => {
-        frappe.dom.unfreeze();
-        setTimeout(() => {
-          $("#freeze, .modal-backdrop, #freeze.in").remove();
-          $("body").css("opacity", 1);
-        }, 200);
-      });
+      if (from_held) {
+        return frappe.run_serially([
+          () => frappe.dom.freeze(),
+          () => this.make_sales_invoice_frm(),
+          () => this.set_pos_profile_data(),
+          () => this.set_pos_profile_status(),
+          () => this.cart.load_invoice(),
+          () => frappe.dom.unfreeze(),
+          () => this.toggle_recent_order()
+        ]);
+      } else {
+        return frappe.run_serially([
+          () => frappe.dom.freeze(),
+          () => this.make_sales_invoice_frm(),
+          () => this.set_pos_profile_data(),
+          () => this.set_pos_profile_status(),
+          () => this.cart.load_invoice(),
+          () => frappe.dom.unfreeze()
+        ]);
+      }
     }
     make_sales_invoice_frm() {
-      const doctype = "Sales Order";
+      const doctype = "POS Invoice";
       return new Promise((resolve) => {
         if (this.frm) {
           this.frm = this.get_new_frm(this.frm);
           this.frm.doc.items = [];
-          this.frm.doc.taxes = [];
-          this.frm.doc.custom_is_posnext = 1;
+          this.frm.doc.is_pos = 1;
           this.frm.doc.set_warehouse = this.settings.warehouse;
-          this.frm.doc.transaction_date = frappe.datetime.get_today();
-          this.frm.doc.delivery_date = frappe.datetime.get_today();
           resolve();
         } else {
           frappe.model.with_doctype(doctype, () => {
             this.frm = this.get_new_frm();
             this.frm.doc.items = [];
-            this.frm.doc.taxes = [];
-            this.frm.doc.custom_is_posnext = 1;
+            this.frm.doc.is_pos = 1;
             this.frm.doc.set_warehouse = this.settings.warehouse;
-            this.frm.doc.transaction_date = frappe.datetime.get_today();
-            this.frm.doc.delivery_date = frappe.datetime.get_today();
+            console.log("THIS FRRRRM");
+            console.log(this.frm.doc);
             resolve();
           });
         }
       });
     }
     get_new_frm(_frm) {
-      const doctype = "Sales Order";
+      const doctype = "POS Invoice";
       const page = $("<div>");
       const frm = _frm || new frappe.ui.form.Form(doctype, page, false);
       const name = frappe.model.make_new_doc_and_get_name(doctype, true);
       frm.refresh(name);
-      frm.doc.custom_is_posnext = 1;
       return frm;
     }
     async make_return_invoice(doc) {
@@ -710,7 +525,7 @@ Thank you for your business!`;
       this.frm = this.get_new_frm(this.frm);
       this.frm.doc.items = [];
       return frappe.call({
-        method: "posnext.posnext.page.posnext.point_of_sale.make_sales_return",
+        method: "erpnext.accounts.doctype.pos_invoice.pos_invoice.make_sales_return",
         args: {
           "source_name": doc.name,
           "target_doc": this.frm.doc
@@ -738,7 +553,7 @@ Thank you for your business!`;
       this.page.set_indicator(this.pos_profile, "blue");
     }
     async on_cart_update(args) {
-      console.log("Updating Cart");
+      frappe.dom.freeze();
       let item_row = void 0;
       try {
         let { field, value, item } = args;
@@ -752,6 +567,7 @@ Thank you for your business!`;
             value = flt(value);
           if (["qty", "conversion_factor"].includes(field) && value > 0 && !this.allow_negative_stock) {
             const qty_needed = field === "qty" ? value * item_row.conversion_factor : item_row.qty * value;
+            await this.check_stock_availability(item_row, qty_needed, this.frm.doc.set_warehouse);
           }
           if (this.is_current_item_being_edited(item_row) || from_selector) {
             await frappe.model.set_value(item_row.doctype, item_row.name, field, value);
@@ -762,27 +578,9 @@ Thank you for your business!`;
             return this.raise_customer_selection_alert();
           }
           frappe.flags.ignore_company_party_validation = true;
-          const { item_code, batch_no, serial_no, rate, uom, valuation_rate, custom_item_uoms, custom_logical_rack } = item;
+          const { item_code, batch_no, serial_no, rate, uom } = item;
           if (!item_code)
             return;
-          if (this.settings.custom_product_bundle) {
-            const product_bundle = await this.get_product_bundle(item_code);
-            if (product_bundle && Array.isArray(product_bundle.items)) {
-              const bundle_items = product_bundle.items.map((bundle_item) => ({
-                item_code: bundle_item.item_code,
-                qty: bundle_item.qty * value,
-                rate: bundle_item.rate,
-                uom: bundle_item.uom,
-                custom_bundle_id: product_bundle.name
-              }));
-              for (const bundle_item of bundle_items) {
-                const bundle_item_row = this.frm.add_child("items", bundle_item);
-                await this.trigger_new_item_events(bundle_item_row);
-              }
-              this.update_cart_html();
-              return;
-            }
-          }
           const new_item = { item_code, batch_no, rate, uom, [field]: value };
           if (value) {
             new_item["qty"] = value;
@@ -795,9 +593,11 @@ Thank you for your business!`;
             new_item["qty"] = value.split(`
 `).length || 0;
           item_row = this.frm.add_child("items", new_item);
+          if (field === "qty" && value !== 0 && !this.allow_negative_stock) {
+            const qty_needed = value * item_row.conversion_factor;
+            await this.check_stock_availability(item_row, qty_needed, this.frm.doc.set_warehouse);
+          }
           await this.trigger_new_item_events(item_row);
-          item_row["custom_item_uoms"] = custom_item_uoms;
-          item_row["custom_logical_rack"] = custom_logical_rack;
           this.update_cart_html(item_row);
           if (this.item_details.$component.is(":visible"))
             this.edit_item_details_of(item_row);
@@ -807,14 +607,7 @@ Thank you for your business!`;
       } catch (error) {
         console.log(error);
       } finally {
-        var total_incoming_rate = 0;
-        this.frm.doc.items.forEach((item) => {
-          total_incoming_rate += parseFloat(item.valuation_rate) * item.qty;
-        });
-        this.item_selector.update_total_incoming_rate(total_incoming_rate);
-        if (this.cart) {
-          this.cart.update_totals_section(this.frm);
-        }
+        frappe.dom.unfreeze();
         return item_row;
       }
     }
@@ -826,29 +619,15 @@ Thank you for your business!`;
       });
       frappe.utils.play_sound("error");
     }
-    async get_product_bundle(item_code) {
-      const response = await frappe.call({
-        method: "posnext.doc_events.item.get_product_bundle_with_items",
-        args: {
-          item_code
-        }
-      });
-      return response.message;
-    }
     get_item_from_frm({ name, item_code, batch_no, uom, rate }) {
       let item_row = null;
       if (name) {
-        item_row = this.frm.doc.items.find((i2) => i2.name == name);
+        item_row = this.frm.doc.items.find((i) => i.name == name);
       } else {
-        for (var i = 0; i < cur_frm.doc.items.length; i += 1) {
-          const has_batch_no = batch_no !== "null" && batch_no !== null;
-          const batch_no_check = this.settings.custom_allow_add_new_items_on_new_line ? has_batch_no && cur_frm.doc.items[i].batch_no === batch_no : true;
-          if (cur_frm.doc.items[i].item_code === item_code && cur_frm.doc.items[i].uom === uom && parseFloat(cur_frm.doc.items[i].rate) === parseFloat(rate) && batch_no_check) {
-            item_row = cur_frm.doc.items[i];
-            break;
-          }
-        }
-        console.log(item_row);
+        const has_batch_no = batch_no !== "null" && batch_no !== null;
+        item_row = this.frm.doc.items.find(
+          (i) => i.item_code === item_code && (has_batch_no && i.batch_no === batch_no) && i.uom === uom && i.rate === flt(rate)
+        );
       }
       return item_row || {};
     }
@@ -875,13 +654,13 @@ Thank you for your business!`;
     async trigger_new_item_events(item_row) {
       await this.frm.script_manager.trigger("item_code", item_row.doctype, item_row.name);
       await this.frm.script_manager.trigger("qty", item_row.doctype, item_row.name);
-      await this.frm.script_manager.trigger("discount_percentage", item_row.doctype, item_row.name);
     }
     async check_stock_availability(item_row, qty_needed, warehouse) {
       const resp = (await this.get_available_stock(item_row.item_code, warehouse)).message;
       const available_qty = resp[0];
       const is_stock_item = resp[1];
       frappe.dom.unfreeze();
+      console.log(item_row);
       const bold_uom = item_row.uom.bold();
       const bold_item_code = item_row.item_code.bold();
       const bold_warehouse = warehouse.bold();
@@ -912,7 +691,7 @@ Thank you for your business!`;
       if (res.message.includes(serial_no)) {
         frappe.throw({
           title: __("Not Available"),
-          message: __("Serial No: {0} has already been transacted into another Sales Invoice.", [serial_no.bold()])
+          message: __("Serial No: {0} has already been transacted into another POS Invoice.", [serial_no.bold()])
         });
       }
     }
@@ -952,130 +731,18 @@ Thank you for your business!`;
         this.update_cart_html(current_item, true);
         this.item_details.toggle_item_details_section(null);
         frappe.dom.unfreeze();
-        var total_incoming_rate = 0;
-        this.frm.doc.items.forEach((item) => {
-          total_incoming_rate += parseFloat(item.valuation_rate) * item.qty;
-        });
-        this.item_selector.update_total_incoming_rate(total_incoming_rate);
       }).catch((e) => console.log(e));
     }
     async save_and_checkout() {
-      if (!this.frm.doc.items || this.frm.doc.items.length === 0) {
-        frappe.show_alert({
-          message: __("Please add items to cart before checkout."),
-          indicator: "red"
-        });
-        frappe.utils.play_sound("error");
-        return;
-      }
       if (this.frm.is_dirty()) {
-        if (this.settings.custom_add_reference_details) {
-          const dialog = new frappe.ui.Dialog({
-            title: __("Enter Reference Details"),
-            fields: [
-              {
-                fieldtype: "Data",
-                label: __("Reference Number"),
-                fieldname: "reference_no"
-              },
-              {
-                fieldtype: "Data",
-                label: __("Reference Name"),
-                fieldname: "reference_name"
-              }
-            ],
-            primary_action_label: __("Proceed to Checkout"),
-            primary_action: async (values) => {
-              this.frm.doc.custom_reference_no = values.reference_no;
-              this.frm.doc.custom_reference_name = values.reference_name;
-              const div = document.getElementById("customer-cart-container2");
-              if (div)
-                div.style.gridColumn = "";
-              let save_error = false;
-              await this.frm.save(null, null, null, () => save_error = true);
-              dialog.hide();
-              if (!save_error) {
-                this.payment.checkout();
-              } else {
-                setTimeout(() => {
-                  this.cart.toggle_checkout_btn(true);
-                }, 300);
-              }
-            }
-          });
-          dialog.show();
-        } else {
-          const div = document.getElementById("customer-cart-container2");
-          if (div)
-            div.style.gridColumn = "";
-          let save_error = false;
-          await this.frm.save(null, null, null, () => save_error = true);
-          if (!save_error) {
-            this.payment.checkout();
-          } else {
-            setTimeout(() => {
-              this.cart.toggle_checkout_btn(true);
-            }, 300);
-          }
-        }
-      } else {
-        this.payment.checkout();
-      }
-    }
-    async submit_sales_order_directly() {
-      try {
-        if (this.frm.is_dirty()) {
-          await this.frm.save();
-        }
-        const current_user = frappe.session.user;
-        console.log("Current user:", current_user);
-        const sales_person_response = await frappe.call({
-          method: "frappe.client.get_list",
-          args: {
-            doctype: "Sales Person",
-            filters: {
-              "custom_user": current_user
-            },
-            fields: ["name"],
-            limit: 1
-          }
-        });
-        if (sales_person_response.message && sales_person_response.message.length > 0) {
-          const sales_person_name = sales_person_response.message[0].name;
-          console.log("Found Sales Person:", sales_person_name);
-          this.frm.doc.custom_sales_person = sales_person_name;
-          this.frm.clear_table("sales_team");
-          this.frm.add_child("sales_team", {
-            sales_person: sales_person_name,
-            allocated_percentage: 100
-          });
-          console.log("Sales person set in sales_team and custom_sales_person");
-        } else {
-          console.log("No Sales Person found for user:", current_user);
-        }
-        await this.frm.savesubmit();
-        await this.frm.reload_doc();
-        this.toggle_components(false);
-        console.log("Showing order summary component...");
-        this.order_summary.toggle_component(true);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        console.log("Loading summary data...");
-        this.order_summary.load_summary_of(this.frm.doc, true);
-        frappe.show_alert({
-          indicator: "green",
-          message: __("Sales Order {0} created successfully", [this.frm.doc.name])
-        });
-      } catch (error) {
-        console.error("Error submitting sales order:", error);
-        if (error && error.message && !error.message.includes("Not permitted")) {
-          frappe.show_alert({
-            indicator: "red",
-            message: __("Error: {0}", [error.message])
-          });
-        }
-        setTimeout(() => {
+        let save_error = false;
+        await this.frm.save(null, null, null, () => save_error = true);
+        !save_error && this.payment.checkout();
+        save_error && setTimeout(() => {
           this.cart.toggle_checkout_btn(true);
         }, 300);
+      } else {
+        this.payment.checkout();
       }
     }
   };
@@ -1136,10 +803,11 @@ Thank you for your business!`;
         }
         this.wrapper.append(
           `<section class="items-selector" id="card-view-section" style="grid-column: span 5/span 5!important;">
-					<div class="filter-section">` + cardlist + `<div class="pos-profile" style="grid-column: span 2 / span 2"></div>
+					<div class="filter-section">` + cardlist + `<div class="pos-profile" style="grid-column: span 2 / span 2;display: none;"></div>
 						<div class="search-field" style="grid-column: span 4 / span 4"></div>
 						<!--<div class="item-code-search-field" style="grid-column: span 2 / span 2"></div>-->
 						<div class="item-group-field" style="grid-column: span 2 / span 2"></div>
+						<div class="vat-type-field" style="margin-left: 10px;grid-column: span 2 / span 2;width: 211%;"></div>
 						<div class="invoice-posting-date" style="margin-left: 10px;grid-column: span 2 / span 2"></div>` + tir + `
 						
 					</div>
@@ -1159,10 +827,11 @@ Thank you for your business!`;
           tir = `<div class="total-incoming-rate" style="margin-left: 10px;grid-column: span 2 / span 2"></div>`;
         }
         this.wrapper.append(
-          section + `<div class="filter-section">` + cardlist + `<div class="pos-profile" style="grid-column: span 2 / span 2"></div>
+          section + `<div class="filter-section">` + cardlist + `<div class="pos-profile" style="grid-column: span 2 / span 2;display: none;"></div>
 						<div class="search-field" style="grid-column: span 4 / span 4"></div>
 						<!--<div class="item-code-search-field" style="grid-column: span 2 / span 2"></div>-->
 						<div class="item-group-field" style="grid-column: span 2 / span 2"></div>
+						<div class="vat-type-field" style="margin-left: 10px;grid-column: span 2 / span 2;width: 211%;"></div>
 						<div class="invoice-posting-date" style="margin-left: 10px;grid-column: span 2 / span 2"></div>` + tir + `
 						
 					</div>
@@ -1293,13 +962,12 @@ Thank you for your business!`;
       let { item_group, pos_profile } = this;
       !item_group && (item_group = this.parent_item_group);
       return frappe.call({
-        method: "posnext.posnext.page.posnext.point_of_sale.get_items",
+        method: "erpnext.selling.page.point_of_sale.point_of_sale.get_items",
         freeze: true,
         args: { start, page_length, price_list, item_group, search_term, pos_profile }
       });
     }
     render_item_list(items) {
-      this.$items_container.html("");
       var me = this;
       if (view === "List") {
         let get_item_code_header2 = function() {
@@ -1327,15 +995,16 @@ Thank you for your business!`;
           }
         };
         var get_item_code_header = get_item_code_header2;
+        this.$items_container.html("");
         this.$items_container.append(
           `<div class="abs-cart-container" style="overflow-y:hidden">
 					<div class="cart-header">
 					${get_item_code_header2()}
 						<div style="flex: 1">${__("Rate")}</div>
-						<div style="flex: 1">${__("Avail. Qty")}</div>
-						<!--<div class="qty-header">${__("UOM")}</div>-->
+						<div style="flex: 1">${__("Available Qty")}</div>
+						<div class="qty-header">${__("UOM")}</div>
 					</div>
-					<div class="cart-items-section" style="overflow-y:scroll;font-size: 12px"></div>
+					<div class="cart-items-section" style="overflow-y:hidden"></div>
 				</div>`
         );
         this.make_cart_items_section();
@@ -1371,9 +1040,6 @@ Thank you for your business!`;
 			data-batch-no="${escape(item_data.batch_no)}" 
 			data-uom="${escape(item_data.uom)}"
 			data-rate="${escape(item_data.price_list_rate || 0)}"
-			data-valuation-rate="${escape(item_data.valuation_rate || item_data.custom_valuation_rate)}"
-			data-item-uoms="${item_data.custom_item_uoms}"
-			data-item-logical-rack="${item_data.custom_logical_rack}"
 			title="${item_data.item_name}"
 			data-row-name="${escape(item_data.item_code)}"></div>
 			<div class="seperator"></div>`
@@ -1382,11 +1048,10 @@ Thank you for your business!`;
       $item_to_update.html(
         `${get_item_image_html()}
 			${get_item_name()}
-			
-				<div style="overflow-wrap: break-word;overflow:hidden;white-space: normal;font-weight: 700;margin-right: 10px">
+				<div class="item-name" >
 					${item_data.item_name}
 				</div>
-				${get_description_html(item_data)}
+				${get_description_html()}
 			</div>
 			${get_item_code()}
 			${get_rate_discount_html()}`
@@ -1474,17 +1139,17 @@ Thank you for your business!`;
 					</div>`;
         }
       }
-      function get_description_html(item_data2) {
-        if (me.custom_show_item_discription) {
-          if (item_data2.description.indexOf("<div>") != -1) {
+      function get_description_html() {
+        if (item_data.description) {
+          if (item_data.description.indexOf("<div>") != -1) {
             try {
-              item_data2.description = $(item_data2.description).text();
+              item_data.description = $(item_data.description).text();
             } catch (error) {
-              item_data2.description = item_data2.description.replace(/<div>/g, " ").replace(/<\/div>/g, " ").replace(/ +/g, " ");
+              item_data.description = item_data.description.replace(/<div>/g, " ").replace(/<\/div>/g, " ").replace(/ +/g, " ");
             }
           }
-          item_data2.description = frappe.ellipsis(item_data2.description, 45);
-          return `<div class="item-desc">${item_data2.description}</div>`;
+          item_data.description = frappe.ellipsis(item_data.description, 45);
+          return `<div class="item-desc">${item_data.description}</div>`;
         }
         return ``;
       }
@@ -1542,7 +1207,8 @@ Thank you for your business!`;
 				data-item-code="${escape(item.item_code)}" data-serial-no="${escape(serial_no)}"
 				data-batch-no="${escape(batch_no)}" data-uom="${escape(uom)}"
 				data-rate="${escape(price_list_rate || 0)}"
-				title="${item.item_name}">
+				title="${item.item_name}"
+				style="position: relative;">
 
 				${get_item_image_html()}
 
@@ -1570,6 +1236,7 @@ Thank you for your business!`;
       this.$component.find(".pos-profile").html("");
       this.$component.find(".total-incoming-rate").html("");
       this.$component.find(".item-group-field").html("");
+      this.$component.find(".vat-type-field").html("");
       this.$component.find(".invoice-posting-date").html("");
       frappe.db.get_single_value("POS Settings", "custom_profile_lock").then((doc2) => {
         this.pos_profile_field = frappe.ui.form.make_control({
@@ -1614,7 +1281,7 @@ Thank you for your business!`;
           },
           get_query: function() {
             return {
-              query: "posnext.posnext.page.posnext.point_of_sale.item_group_query",
+              query: "erpnext.selling.page.point_of_sale.point_of_sale.item_group_query",
               filters: {
                 pos_profile: doc ? doc.pos_profile : ""
               }
@@ -1624,6 +1291,23 @@ Thank you for your business!`;
         parent: this.$component.find(".item-group-field"),
         render_input: true
       });
+      this.vat_type_field = frappe.ui.form.make_control({
+        df: {
+          label: __("Vat Type"),
+          fieldtype: "Select",
+          options: "\nTax\nWithout Tax",
+          placeholder: __("Select Vat Type"),
+          default: "Tax",
+          onchange: function() {
+            me.vat_type = this.value;
+            me.update_vat_on_sales_order();
+          }
+        },
+        parent: this.$component.find(".vat-type-field"),
+        render_input: true
+      });
+      this.vat_type = "Tax";
+      this.vat_type_field.set_value("Tax");
       if (this.custom_show_last_incoming_rate || this.custom_show_incoming_rate) {
         this.total_incoming_rate = frappe.ui.form.make_control({
           df: {
@@ -1653,6 +1337,7 @@ Thank you for your business!`;
       }
       this.search_field.toggle_label(false);
       this.item_group_field.toggle_label(false);
+      this.vat_type_field.toggle_label(false);
       if (this.custom_show_last_incoming_rate) {
         this.total_incoming_rate.toggle_label(false);
       }
@@ -1661,6 +1346,35 @@ Thank you for your business!`;
         this.invoice_posting_date.set_value(frappe.datetime.get_today());
       }
       this.attach_clear_btn();
+    }
+    update_vat_on_sales_order() {
+      const me = this;
+      const frm = me.events.get_frm();
+      if (!frm || !frm.doc)
+        return;
+      if (window.cur_pos) {
+        window.cur_pos.item_selector = me;
+      }
+      if (frm.doc && frm.doc.doctype === "POS Invoice") {
+        frm.set_value("custom_type", me.vat_type);
+      }
+      if (me.vat_type === "Tax") {
+        if (frm.doc.pos_profile) {
+          frappe.db.get_doc("POS Profile", frm.doc.pos_profile).then((pos_profile) => {
+            if (pos_profile.taxes_and_charges) {
+              frm.set_value("taxes_and_charges", pos_profile.taxes_and_charges);
+              frm.trigger("taxes_and_charges");
+            }
+          });
+        }
+      } else if (me.vat_type === "Without Tax") {
+        frm.set_value("taxes_and_charges", "");
+        frm.clear_table("taxes");
+        frm.refresh_field("taxes");
+        if (frm.cscript && frm.cscript.calculate_taxes_and_totals) {
+          frm.cscript.calculate_taxes_and_totals();
+        }
+      }
     }
     attach_clear_btn() {
       this.search_field.$wrapper.find(".control-input").append(
@@ -1837,6 +1551,7 @@ Thank you for your business!`;
     constructor({ wrapper, events, settings }) {
       this.wrapper = wrapper;
       this.events = events;
+      this.customer_info = void 0;
       this.hide_images = settings.hide_images;
       this.allowed_customer_groups = settings.customer_groups;
       this.allow_rate_change = settings.allow_rate_change;
@@ -1845,20 +1560,7 @@ Thank you for your business!`;
       this.show_order_list_button = settings.custom_show_order_list_button;
       this.mobile_number_based_customer = settings.custom_mobile_number_based_customer;
       this.show_checkout_button = settings.custom_show_checkout_button;
-      this.custom_edit_rate = settings.custom_edit_rate_and_uom;
-      this.custom_use_discount_percentage = settings.custom_use_discount_percentage;
-      this.custom_use_discount_amount = settings.custom_use_discount_amount;
-      this.custom_use_additional_discount_amount = settings.custom_use_additional_discount_amount;
-      this.custom_show_incoming_rate = settings.custom_show_incoming_rate && settings.custom_edit_rate_and_uom;
-      this.custom_show_last_customer_rate = settings.custom_show_last_customer_rate;
-      this.custom_show_logical_rack_in_cart = settings.custom_show_logical_rack_in_cart && settings.custom_edit_rate_and_uom;
-      this.custom_show_uom_in_cart = settings.custom_show_uom_in_cart && settings.custom_edit_rate_and_uom;
-      this.show_branch = settings.show_branch;
-      this.show_batch_in_cart = settings.show_batch_in_cart;
-      this.custom_show_item_discription = settings.custom_show_item_discription;
-      this.custom_show_item_barcode = settings.custom_show_item_barcode;
       this.settings = settings;
-      this.warehouse = settings.warehouse;
       this.init_component();
     }
     init_component() {
@@ -1868,15 +1570,9 @@ Thank you for your business!`;
       this.attach_shortcuts();
     }
     prepare_dom() {
-      if (this.custom_edit_rate) {
-        this.wrapper.append(
-          `<section class="customer-cart-container customer-cart-container1 " style="grid-column: span 5 / span 5;" id="customer-cart-container2"></section>`
-        );
-      } else {
-        this.wrapper.append(
-          `<section class="customer-cart-container customer-cart-container1 " id="customer-cart-container2"></section>`
-        );
-      }
+      this.wrapper.append(
+        `<section class="customer-cart-container customer-cart-container1 " id="customer-cart-container2"></section>`
+      );
       this.$component = this.wrapper.find(".customer-cart-container1");
     }
     init_child_components() {
@@ -1897,25 +1593,22 @@ Thank you for your business!`;
       this.customer_field.set_focus();
     }
     init_cart_components() {
-      var html = `<div class="cart-container">
+      this.$component.append(
+        `<div class="cart-container">
 				<div class="abs-cart-container">
 					<div class="cart-label">${__("Item Cart")}</div>
 					<div class="cart-header">
-						<div class="name-header" style="flex:3">${__("Item")}</div>
-						<div class="qty-header" style="flex: 1">${__("Qty")}</div>
-						<div class="uom-header" style="flex: 1">${__("UOM")}</div>
-						`;
-      html += `<div class="rate-amount-header" style="flex: 1;text-align: left">${__("Amount")}</div>
+						<div class="name-header">${__("Item")}</div>
+						<div class="qty-header">${__("Quantity")}</div>
+						<div class="rate-amount-header">${__("Amount")}</div>
 					</div>
-					<div class="cart-items-section" ></div>
-					<div class="cart-branch-section"></div>
+					<div class="cart-items-section"></div>
 					<div class="cart-totals-section"></div>
 					<div class="numpad-section"></div>
 				</div>
-			</div>`;
-      this.$component.append(html);
+			</div>`
+      );
       this.$cart_container = this.$component.find(".cart-container");
-      this.make_branch_section();
       this.make_cart_totals_section();
       this.make_cart_items_section();
       this.make_cart_numpad();
@@ -1938,34 +1631,6 @@ Thank you for your business!`;
 				<path d="M10.5 9.5C10.5 10.0523 10.0523 10.5 9.5 10.5C8.94772 10.5 8.5 10.0523 8.5 9.5C8.5 8.94772 8.94772 8.5 9.5 8.5C10.0523 8.5 10.5 8.94772 10.5 9.5Z" fill="white" stroke-linecap="round" stroke-linejoin="round"/>
 				<path d="M15.5 14.5C15.5 15.0523 15.0523 15.5 14.5 15.5C13.9477 15.5 13.5 15.0523 13.5 14.5C13.5 13.9477 13.9477 13.5 14.5 13.5C15.0523 13.5 15.5 13.9477 15.5 14.5Z" fill="white" stroke-linecap="round" stroke-linejoin="round"/>
 			</svg>`;
-    }
-    get_branch_icon() {
-      return `
-			<svg class="branch-icon" width="24" height="24" viewBox="0 0 24 24" stroke="currentColor" fill="none" xmlns="http://www.w3.org/2000/svg">
-				<path d="M5 3V9M5 3C6.65685 3 8 4.34315 8 6C8 7.65685 6.65685 9 5 9M5 3C3.34315 3 2 4.34315 2 6C2 7.65685 3.34315 9 5 9M19 15V21M19 15C20.6569 15 22 16.3431 22 18C22 19.6569 20.6569 21 19 21M19 15C17.3431 15 16 16.3431 16 18C16 19.6569 17.3431 21 19 21M5 9C5 13.4183 8.58172 17 13 17H16" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
-			</svg>
-		`;
-    }
-    make_branch_section() {
-      if (this.show_branch) {
-        this.$branch_section = this.$component.find(".cart-branch-section");
-        if (this.$branch_section.length) {
-          this.$branch_section.append(`
-					<br>
-					<div class="add-branch-wrapper">
-						${this.get_branch_icon()} <span class="add-branch-text">${__("Add Branch")}</span>
-					</div>
-				`);
-          this.$branch_section.find(".add-branch-wrapper").hover(
-            function() {
-              $(this).css("background-color", "#f9f9f9");
-            },
-            function() {
-              $(this).css("background-color", "transparent");
-            }
-          );
-        }
-      }
     }
     make_cart_totals_section() {
       this.$totals_section = this.$component.find(".cart-totals-section");
@@ -1995,7 +1660,7 @@ Thank you for your business!`;
 							border: none;
 							border-radius: 5px;
 							cursor: pointer;
-							flex: 1; ">${__("Checkout (F1)")}</div>
+							flex: 1; ">${__("Checkout")}</div>
 				<div class="checkout-btn-held checkout-btn" style="
 							padding: 10px;
 							align-items: center;
@@ -2004,7 +1669,7 @@ Thank you for your business!`;
 							border: none;
 							border-radius: 5px;
 							cursor: pointer;
-							flex: 1;">${__("Held (F2)")}</div>
+							flex: 1;">${__("Held")}</div>
 				<div class="checkout-btn-order checkout-btn" style="
 				padding: 10px;
 							align-items: center;
@@ -2013,7 +1678,7 @@ Thank you for your business!`;
 							border: none;
 							border-radius: 5px;
 							cursor: pointer;
-							flex: 1;">${__("Order List (F3)")}</div>
+							flex: 1;">${__("Order List")}</div>
 			</div>	
 			<div class="edit-cart-btn">${__("Edit Cart")}</div>`
       );
@@ -2067,19 +1732,17 @@ Thank you for your business!`;
         const show = me.$cart_container.is(":visible");
         me.toggle_customer_info(show);
       });
-      if (!me.custom_edit_rate) {
-        this.$cart_items_wrapper.on("click", ".cart-item-wrapper", function() {
-          const $cart_item = $(this);
-          me.toggle_item_highlight(this);
-          const payment_section_hidden = !me.$totals_section.find(".edit-cart-btn").is(":visible");
-          if (!payment_section_hidden) {
-            me.$totals_section.find(".edit-cart-btn").click();
-          }
-          const item_row_name = unescape($cart_item.attr("data-row-name"));
-          me.events.cart_item_clicked({ name: item_row_name });
-          this.numpad_value = "";
-        });
-      }
+      this.$cart_items_wrapper.on("click", ".cart-item-wrapper", function() {
+        const $cart_item = $(this);
+        me.toggle_item_highlight(this);
+        const payment_section_hidden = !me.$totals_section.find(".edit-cart-btn").is(":visible");
+        if (!payment_section_hidden) {
+          me.$totals_section.find(".edit-cart-btn").click();
+        }
+        const item_row_name = unescape($cart_item.attr("data-row-name"));
+        me.events.cart_item_clicked({ name: item_row_name });
+        this.numpad_value = "";
+      });
       this.$component.on("click", ".checkout-btn", async function() {
         if ($(this).attr("style").indexOf("--blue-500") == -1)
           return;
@@ -2204,14 +1867,6 @@ Thank you for your business!`;
       this.$component.on("click", ".checkout-btn-held", function() {
         if ($(this).attr("style").indexOf("--blue-500") == -1)
           return;
-        if (!cur_frm.doc.items || cur_frm.doc.items.length === 0) {
-          frappe.show_alert({
-            message: __("Please add items to cart before holding."),
-            indicator: "red"
-          });
-          frappe.utils.play_sound("error");
-          return;
-        }
         if (!cur_frm.doc.customer && me.mobile_number_based_customer) {
           let d = new frappe.ui.Dialog({
             title: "Enter Mobile Number",
@@ -2235,22 +1890,88 @@ Thank you for your business!`;
               if (values["mobile_number"].length !== me.settings.custom_mobile_number_length) {
                 frappe.throw("Mobile Number Length is " + me.settings.custom_mobile_number_length.toString());
               }
-              if (me.settings.custom_add_reference_details) {
-                me.show_reference_dialog(values["mobile_number"]);
-              } else {
-                me.hold_invoice(values["mobile_number"]);
-              }
-              d.hide();
+              frappe.call({
+                method: "posnext.posnext.page.posnext.point_of_sale.create_customer",
+                args: {
+                  customer: values["mobile_number"]
+                },
+                freeze: true,
+                freeze_message: "Creating Customer....",
+                callback: async function() {
+                  const frm = me.events.get_frm();
+                  frappe.dom.freeze();
+                  frappe.model.set_value(frm.doc.doctype, frm.doc.name, "customer", values["mobile_number"]);
+                  frm.script_manager.trigger("customer", frm.doc.doctype, frm.doc.name).then(() => {
+                    frappe.run_serially([
+                      () => me.fetch_customer_details(values["mobile_number"]),
+                      () => me.events.customer_details_updated(me.customer_info),
+                      () => me.update_customer_section(),
+                      () => frappe.dom.unfreeze()
+                    ]);
+                  });
+                  me.events.save_draft_invoice();
+                  d.hide();
+                }
+              });
             }
           });
-          me.setup_mobile_numpad(d);
+          var mobile_number_numpad_div = d.wrapper.find(".mobile_number_numpad");
+          mobile_number_numpad_div.append(`
+					<div class="custom-numpad">
+						<style>
+						.custom-numpad {
+							display: grid;
+							grid-template-columns: repeat(3, 1fr);
+							gap: 10px;
+							max-width: 350px;
+							margin: 0 auto;
+						}
+						
+						.numpad-button {
+							padding: 15px;
+							font-size: 18px;
+							cursor: pointer;
+							background-color: #f1f1f1;
+							border: 1px solid #ccc;
+							border-radius: 5px;
+							text-align: center;
+						}
+						
+						.numpad-button:hover {
+							background-color: #ddd;
+						}
+						</style>
+						<button class="numpad-button one">1</button>
+						<button class="numpad-button two">2</button>
+						<button class="numpad-button three">3</button>
+						<button class="numpad-button four">4</button>
+						<button class="numpad-button five">5</button>
+						<button class="numpad-button six">6</button>
+						<button class="numpad-button seven">7</button>
+						<button class="numpad-button eight">8</button>
+						<button class="numpad-button nine">9</button>
+						<button class="numpad-button delete" style="color: red">x</button>
+						<button class="numpad-button zero">0</button>
+						<button class="numpad-button clear">C</button> <!-- Clear button -->
+					</div>`);
           d.show();
-        } else {
-          if (me.settings.custom_add_reference_details) {
-            me.show_reference_dialog();
-          } else {
-            me.hold_invoice();
+          var numpad_num = d.wrapper.find(".custom-numpad");
+          var numbers = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "zero", "plus"];
+          for (var xx = 0; xx < numbers.length; xx += 1) {
+            numpad_num.on("click", "." + numbers[xx], function() {
+              var current_value = d.get_value("mobile_number");
+              d.set_value("mobile_number", current_value + $(this)[0].innerHTML.toString());
+            });
           }
+          numpad_num.on("click", ".clear", function() {
+            d.set_value("mobile_number", "");
+          });
+          numpad_num.on("click", ".delete", function() {
+            var current_value = d.get_value("mobile_number");
+            d.set_value("mobile_number", current_value.slice(0, -1));
+          });
+        } else {
+          me.events.save_draft_invoice();
         }
       });
       this.$component.on("click", ".checkout-btn-order", () => {
@@ -2265,36 +1986,7 @@ Thank you for your business!`;
         if (!this.discount_field || can_edit_discount)
           this.show_discount_control();
       });
-      const $wrapper = $(".add-branch-wrapper");
-      const posProfileName = me.settings.name;
-      const branchFieldWrapper = $('<div class="branch-field"></div>');
-      $wrapper.replaceWith(branchFieldWrapper);
-      frappe.call({
-        method: "posnext.doc_events.pos_profile.get_pos_profile_branch",
-        args: {
-          pos_profile_name: posProfileName
-        },
-        callback: function(r) {
-          const branch_name = r.message && r.message.branch;
-          console.log(branch_name);
-          let branchField = new frappe.ui.form.ControlLink({
-            df: {
-              fieldtype: "Link",
-              options: "Branch",
-              fieldname: "branch",
-              label: "Branch",
-              placeholder: "Select Branch",
-              default: branch_name,
-              reqd: 1
-            },
-            parent: branchFieldWrapper
-          });
-          branchField.make();
-          branchField.set_value(branch_name);
-          branchField.refresh();
-        }
-      });
-      frappe.ui.form.on("Sales Invoice", "paid_amount", (frm) => {
+      frappe.ui.form.on("POS Invoice", "paid_amount", (frm) => {
         this.update_totals_section(frm);
       });
     }
@@ -2448,60 +2140,30 @@ Thank you for your business!`;
       const me = this;
       const frm = me.events.get_frm();
       let discount = frm.doc.additional_discount_percentage;
-      this.discount_field = null;
-      if (me.custom_use_additional_discount_amount) {
-        this.discount_field = frappe.ui.form.make_control({
-          df: {
-            label: __("Discount"),
-            fieldtype: "Data",
-            placeholder: discount ? discount : __("Enter discount amount."),
-            input_class: "input-xs",
-            onchange: function() {
-              setTimeout(() => {
-                if (flt(this.value) != 0) {
-                  frappe.model.set_value(frm.doc.doctype, frm.doc.name, "discount_amount", flt(this.value));
-                  me.hide_discount_control(this.value);
-                } else {
-                  frappe.model.set_value(frm.doc.doctype, frm.doc.name, "discount_amount", 0);
-                  me.$add_discount_elem.css({
-                    "border": "1px dashed var(--gray-500)",
-                    "padding": "var(--padding-sm) var(--padding-md)"
-                  });
-                  me.$add_discount_elem.html(`${me.get_discount_icon()} ${__("Add Discount")}`);
-                }
-              }, 3e3);
+      this.discount_field = frappe.ui.form.make_control({
+        df: {
+          label: __("Discount"),
+          fieldtype: "Data",
+          placeholder: discount ? discount + "%" : __("Enter discount percentage."),
+          input_class: "input-xs",
+          onchange: function() {
+            if (flt(this.value) != 0) {
+              frappe.model.set_value(frm.doc.doctype, frm.doc.name, "additional_discount_percentage", flt(this.value));
+              me.hide_discount_control(this.value);
+            } else {
+              frappe.model.set_value(frm.doc.doctype, frm.doc.name, "additional_discount_percentage", 0);
+              me.$add_discount_elem.css({
+                "border": "1px dashed var(--gray-500)",
+                "padding": "var(--padding-sm) var(--padding-md)"
+              });
+              me.$add_discount_elem.html(`${me.get_discount_icon()} ${__("Add Discount")}`);
+              me.discount_field = void 0;
             }
-          },
-          parent: this.$add_discount_elem.find(".add-discount-field"),
-          render_input: true
-        });
-      } else {
-        this.discount_field = frappe.ui.form.make_control({
-          df: {
-            label: __("Discount"),
-            fieldtype: "Data",
-            placeholder: discount ? discount + "%" : __("Enter discount percentage."),
-            input_class: "input-xs",
-            onchange: function() {
-              setTimeout(() => {
-                if (flt(this.value) != 0) {
-                  frappe.model.set_value(frm.doc.doctype, frm.doc.name, "additional_discount_percentage", flt(this.value));
-                  me.hide_discount_control(this.value);
-                } else {
-                  frappe.model.set_value(frm.doc.doctype, frm.doc.name, "additional_discount_percentage", 0);
-                  me.$add_discount_elem.css({
-                    "border": "1px dashed var(--gray-500)",
-                    "padding": "var(--padding-sm) var(--padding-md)"
-                  });
-                  me.$add_discount_elem.html(`${me.get_discount_icon()} ${__("Add Discount")}`);
-                }
-              }, 3e3);
-            }
-          },
-          parent: this.$add_discount_elem.find(".add-discount-field"),
-          render_input: true
-        });
-      }
+          }
+        },
+        parent: this.$add_discount_elem.find(".add-discount-field"),
+        render_input: true
+      });
       this.discount_field.toggle_label(false);
       this.discount_field.set_focus();
     }
@@ -2516,19 +2178,11 @@ Thank you for your business!`;
           "border": "1px dashed var(--dark-green-500)",
           "padding": "var(--padding-sm) var(--padding-md)"
         });
-        if (this.custom_use_additional_discount_amount) {
-          this.$add_discount_elem.html(
-            `<div class="edit-discount-btn">
-						${this.get_discount_icon()} ${__("Additional")}&nbsp;${String(discount).bold()}&nbsp;${this.events.get_frm().doc.currency} ${__("discount applied")}
-					</div>`
-          );
-        } else {
-          this.$add_discount_elem.html(
-            `<div class="edit-discount-btn">
-						${this.get_discount_icon()} ${__("Additional")}&nbsp;${String(discount).bold()}% ${__("discount applied")}
-					</div>`
-          );
-        }
+        this.$add_discount_elem.html(
+          `<div class="edit-discount-btn">
+					${this.get_discount_icon()} ${__("Additional")}&nbsp;${String(discount).bold()}% ${__("discount applied")}
+				</div>`
+        );
       }
     }
     update_customer_section() {
@@ -2582,32 +2236,19 @@ Thank you for your business!`;
     update_totals_section(frm) {
       if (!frm)
         frm = this.events.get_frm();
-      console.log("Update totals - current taxes:", frm.doc.taxes);
-      console.log("Update totals - taxes_and_charges:", frm.doc.taxes_and_charges);
-      frm.cscript.calculate_taxes_and_totals();
-      this.render_net_total(frm.doc.items);
+      this.render_net_total(frm.doc.net_total);
       this.render_total_item_qty(frm.doc.items);
-      let grand_total = cint(frappe.sys_defaults.disable_rounded_total) ? frm.doc.grand_total : frm.doc.rounded_total;
-      if (!frm.doc.items || frm.doc.items.length === 0) {
-        if (Math.abs(grand_total) != 5e-3) {
-          grand_total = 0;
-        }
-      }
+      const grand_total = cint(frappe.sys_defaults.disable_rounded_total) ? frm.doc.grand_total : frm.doc.rounded_total;
       this.render_grand_total(grand_total);
-      console.log("After calculate - taxes:", frm.doc.taxes);
       this.render_taxes(frm.doc.taxes);
     }
-    render_net_total(items) {
+    render_net_total(value) {
       const currency = this.events.get_frm().doc.currency;
-      var total_net_amount = 0;
-      items.map((item) => {
-        total_net_amount = total_net_amount + item.net_amount;
-      });
       this.$totals_section.find(".net-total-container").html(
-        `<div>${__("Net Total")}</div><div>${format_currency(total_net_amount, currency)}</div>`
+        `<div>${__("Net Total")}</div><div>${format_currency(value, currency)}</div>`
       );
       this.$numpad_section.find(".numpad-net-total").html(
-        `<div>${__("Net Total")}: <span>${format_currency(total_net_amount, currency)}</span></div>`
+        `<div>${__("Net Total")}: <span>${format_currency(value, currency)}</span></div>`
       );
     }
     render_total_item_qty(items) {
@@ -2632,21 +2273,19 @@ Thank you for your business!`;
       );
     }
     render_taxes(taxes) {
-      console.log("Rendering taxes:", taxes);
       if (taxes && taxes.length) {
         const currency = this.events.get_frm().doc.currency;
         const taxes_html = taxes.map((t) => {
-          const tax_amount = t.tax_amount_after_discount_amount || t.tax_amount || 0;
+          if (t.tax_amount_after_discount_amount == 0)
+            return;
           const description = /[0-9]+/.test(t.description) ? t.description : t.rate != 0 ? `${t.description} @ ${t.rate}%` : t.description;
           return `<div class="tax-row">
 					<div class="tax-label">${description}</div>
-					<div class="tax-value">${format_currency(tax_amount, currency)}</div>
+					<div class="tax-value">${format_currency(t.tax_amount_after_discount_amount, currency)}</div>
 				</div>`;
         }).join("");
-        console.log("Taxes HTML:", taxes_html);
         this.$totals_section.find(".taxes-container").css("display", "flex").html(taxes_html);
       } else {
-        console.log("No taxes to render");
         this.$totals_section.find(".taxes-container").css("display", "none").html("");
       }
     }
@@ -2674,223 +2313,22 @@ Thank you for your business!`;
       const currency = this.events.get_frm().doc.currency;
       const me = this;
       if (!$item_to_update.length) {
-        this.$cart_items_wrapper.prepend(
+        this.$cart_items_wrapper.append(
           `<div class="cart-item-wrapper" data-row-name="${escape(item_data.name)}"></div>
 				<div class="seperator"></div>`
         );
         $item_to_update = this.get_cart_item(item_data);
       }
-      var item_html = `${get_item_image_html()}`;
-      if (me.custom_use_discount_percentage && !me.custom_use_discount_amount) {
-        item_html += `<div class="item-name-desc" style="flex: 2.8">`;
-      }
-      if (me.custom_use_discount_amount && !me.custom_use_discount_percentage) {
-        item_html += `<div class="item-name-desc" style="flex: 2.8">`;
-      }
-      if (me.custom_use_discount_amount && me.custom_use_discount_percentage) {
-        item_html += `<div class="item-name-desc" style="flex: 2.5">`;
-      }
-      if (!me.custom_use_discount_amount && !me.custom_use_discount_percentage) {
-        item_html += `<div class="item-name-desc" style="flex: 3.5">`;
-      }
-      item_html += `<div class="item-name" style="flex: 4; white-space: normal; word-wrap: break-word; overflow: visible; line-height: 1.2;">
-					${item_data.item_name || item_data.item_code || ""}
-					</div>
-				${get_description_html(item_data)}
-				${get_item_barcode(item_data)}
+      $item_to_update.html(
+        `${get_item_image_html()}
+			<div class="item-name-desc">
+				<div class="item-name">
+					${item_data.item_name}
+				</div>
+				${get_description_html()}
 			</div>
-			${get_rate_discount_html()}`;
-      $item_to_update.html(item_html);
-      if (me.custom_edit_rate) {
-        this[item_data.item_code + "_qty"] = frappe.ui.form.make_control({
-          df: {
-            fieldname: "qty",
-            fieldtype: "Float",
-            onchange: function() {
-              me.events.form_updated(item_data, "qty", this.value);
-            }
-          },
-          parent: $item_to_update.find(`.item-qty`),
-          render_input: true
-        });
-        var uoms = [];
-        if (item_data.custom_item_uoms) {
-          uoms = item_data.custom_item_uoms.split(",");
-        } else if (item_data.uom) {
-          uoms = [item_data.uom];
-        }
-        if (me.custom_show_uom_in_cart) {
-          this[item_data.item_code + "_uom"] = frappe.ui.form.make_control({
-            df: {
-              fieldname: "uom",
-              fieldtype: "Select",
-              onchange: function() {
-                me.events.form_updated(item_data, "uom", this.value);
-              }
-            },
-            parent: $item_to_update.find(`.item-uom`),
-            render_input: true
-          });
-        }
-        if (me.show_batch_in_cart) {
-          this[item_data.item_code + "_batch"] = frappe.ui.form.make_control({
-            df: {
-              fieldname: "batch",
-              fieldtype: "Link",
-              options: "Batch",
-              get_query: function() {
-                return {
-                  filters: {
-                    item: item_data.item_code
-                  }
-                };
-              },
-              onchange: function() {
-                me.events.form_updated(item_data, "batch_no", this.value);
-              }
-            },
-            parent: $item_to_update.find(`.item-batch`),
-            render_input: true
-          });
-        }
-        this[item_data.item_code + "_rate"] = frappe.ui.form.make_control({
-          df: {
-            fieldname: "rate",
-            fieldtype: "Float",
-            read_only: !me.allow_rate_change,
-            onchange: function() {
-              me.events.form_updated(item_data, "rate", this.value);
-            }
-          },
-          parent: $item_to_update.find(`.item-rate`),
-          render_input: true
-        });
-        if (me.custom_use_discount_percentage) {
-          this[item_data.item_code + "_discount"] = frappe.ui.form.make_control({
-            df: {
-              fieldname: "discount",
-              fieldtype: "Float",
-              onchange: function() {
-                me.events.form_updated(item_data, "discount_percentage", this.value);
-              }
-            },
-            parent: $item_to_update.find(`.item-rate-discount`),
-            render_input: true
-          });
-        }
-        if (me.custom_use_discount_amount) {
-          this[item_data.item_code + "_discount_amount"] = frappe.ui.form.make_control({
-            df: {
-              fieldname: "discount_amount",
-              fieldtype: "Currency",
-              onchange: function() {
-                me.events.form_updated(item_data, "discount_amount", this.value);
-              }
-            },
-            parent: $item_to_update.find(`.item-rate-discount-amount`),
-            render_input: true
-          });
-        }
-        if (this.custom_show_incoming_rate) {
-          this[item_data.item_code + "_incoming_rate"] = frappe.ui.form.make_control({
-            df: {
-              fieldname: "incoming_rate",
-              fieldtype: "Float",
-              read_only: 1
-            },
-            parent: $item_to_update.find(`.item-incoming-rate`),
-            render_input: true
-          });
-        }
-        if (this.custom_show_logical_rack_in_cart) {
-          this[item_data.item_code + "_logical_rack"] = frappe.ui.form.make_control({
-            df: {
-              fieldname: "logical_rack",
-              fieldtype: "Data",
-              read_only: 1
-            },
-            parent: $item_to_update.find(`.item-logical-rack`),
-            render_input: true
-          });
-        }
-        if (this.custom_show_last_customer_rate) {
-          this[item_data.item_code + "_last_customer_rate"] = frappe.ui.form.make_control({
-            df: {
-              fieldname: "last_customer_rate",
-              fieldtype: "Float",
-              read_only: 1
-            },
-            parent: $item_to_update.find(`.item-last-customer-rate`),
-            render_input: true
-          });
-        }
-        this[item_data.item_code + "_amount"] = frappe.ui.form.make_control({
-          df: {
-            fieldname: "amount",
-            fieldtype: "Float",
-            read_only: 1
-          },
-          parent: $item_to_update.find(`.item-rate-amount`),
-          render_input: true
-        });
-        var delete_button = `<svg width="16px" height="16px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="#ff0000"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M10 11V17" stroke="#ff0000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M14 11V17" stroke="#ff0000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M4 7H20" stroke="#ff0000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M6 7H12H18V18C18 19.6569 16.6569 21 15 21H9C7.34315 21 6 19.6569 6 18V7Z" stroke="#ff0000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5V7H9V5Z" stroke="#ff0000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>`;
-        var remove_button = frappe.ui.form.make_control({
-          df: {
-            fieldname: "remove",
-            fieldtype: "Button",
-            label: delete_button
-          },
-          parent: $item_to_update.find(`.remove-button`),
-          render_input: true
-        });
-        remove_button.refresh();
-        $(remove_button.$input).on("click", function() {
-          me.events.remove_item_from_cart(item_data);
-          me.toggle_item_highlight();
-          me.events.numpad_event(void 0, "remove");
-        });
-        this[item_data.item_code + "_qty"].set_value(item_data.qty);
-        if (me.custom_show_uom_in_cart) {
-          this[item_data.item_code + "_uom"].df.options = uoms;
-          this[item_data.item_code + "_uom"].set_value(item_data.uom);
-          this[item_data.item_code + "_uom"].refresh();
-        }
-        if (me.show_batch_in_cart) {
-          this[item_data.item_code + "_batch"].set_value(item_data.batch_no);
-        }
-        this[item_data.item_code + "_amount"].set_value(item_data.amount);
-        this[item_data.item_code + "_rate"].set_value(item_data.rate);
-        if (me.custom_use_discount_percentage) {
-          this[item_data.item_code + "_discount"].set_value(item_data.discount_percentage);
-        }
-        if (me.custom_use_discount_amount) {
-          this[item_data.item_code + "_discount_amount"].set_value(item_data.discount_amount);
-        }
-        if (me.custom_show_incoming_rate) {
-          this[item_data.item_code + "_incoming_rate"].set_value(item_data.custom_valuation_rate);
-        }
-        if (me.custom_show_logical_rack_in_cart) {
-          this[item_data.item_code + "_logical_rack"].set_value(item_data.custom_logical_rack);
-        }
-        if (me.custom_show_last_customer_rate) {
-          if (me.customer_info.customer) {
-            frappe.xcall("posnext.posnext.page.posnext.point_of_sale.get_lcr", {
-              "customer": me.customer_info.customer,
-              "item_code": item_data.item_code
-            }).then((d) => {
-              this[item_data.item_code + "_last_customer_rate"].set_value(d);
-            });
-          }
-        }
-        if (me.custom_show_uom_in_cart) {
-          frappe.xcall("posnext.posnext.page.posnext.point_of_sale.get_uoms", {
-            "item_code": item_data.item_code
-          }).then((d) => {
-            this[item_data.item_code + "_uom"].df.options = d;
-            this[item_data.item_code + "_uom"].refresh();
-          });
-        }
-      }
+			${get_rate_discount_html()}`
+      );
       set_dynamic_rate_header_width();
       function set_dynamic_rate_header_width() {
         const rate_cols = Array.from(me.$cart_items_wrapper.find(".item-rate-amount"));
@@ -2908,142 +2346,47 @@ Thank you for your business!`;
         me.$cart_items_wrapper.find(".item-rate-amount").css("width", max_width);
       }
       function get_rate_discount_html() {
-        if (me.custom_edit_rate) {
-          if (item_data.rate && item_data.amount && item_data.rate !== item_data.amount) {
-            var html = `
-                        <div class="item-qty-rate" style="flex: 6">
-                        <div class="item-qty" style="flex: 1"></div>`;
-            if (me.custom_show_uom_in_cart) {
-              html += `<div class="item-uom" style="flex: 1;text-align: left"></div>`;
-            }
-            if (me.show_batch_in_cart) {
-              html += `<div class="item-batch" style="flex: 1;text-align: left"></div>`;
-            }
-            html += `<div class="item-rate" style="flex: 1;"></div>`;
-            if (me.custom_use_discount_percentage) {
-              html += `<div class="item-rate-discount" style="flex: 1;text-align: left"></div>`;
-            }
-            if (me.custom_use_discount_amount) {
-              html += `<div class="item-rate-discount-amount" style="flex: 1;text-align: left"></div>`;
-            }
-            if (me.custom_show_incoming_rate) {
-              html += `<div class="item-incoming-rate" style="flex: 1"></div>`;
-            }
-            if (me.custom_show_logical_rack_in_cart) {
-              html += `<div class="item-logical-rack" style="flex: 1"></div>`;
-            }
-            if (me.custom_show_last_customer_rate) {
-              html += `<div class="item-last-customer-rate" style="flex: 1"></div>`;
-            }
-            html += `<div class="item-rate-amount" style="flex: 1"></div>
-							<div class="remove-button" style="margin-top:15px;display: flex;justify-content: center;align-items: center;"></div>
-                        </div>`;
-            return html;
-          } else {
-            var html = `
-                        <div class="item-qty-rate" style="flex: 6">
-                        <div class="item-qty" style="flex: 1"></div>`;
-            if (me.custom_show_uom_in_cart) {
-              html += `<div class="item-uom" style="flex: 1;text-align: left"></div>`;
-            }
-            if (me.show_batch_in_cart) {
-              html += `<div class="item-batch" style="flex: 1;text-align: left"></div>`;
-            }
-            html += `<div class="item-rate" style="flex: 1;"></div>`;
-            if (me.custom_use_discount_percentage) {
-              html += `<div class="item-rate-discount" style="flex: 1;text-align: left"></div>`;
-            }
-            if (me.custom_use_discount_amount) {
-              html += `<div class="item-rate-discount-amount" style="flex: 1;text-align: left"></div>`;
-            }
-            if (me.custom_show_incoming_rate) {
-              html += `<div class="item-incoming-rate" style="flex: 1"></div>`;
-            }
-            if (me.custom_show_logical_rack_in_cart) {
-              html += `<div class="item-logical-rack" style="flex: 1"></div>`;
-            }
-            if (me.custom_show_last_customer_rate) {
-              html += `<div class="item-last-customer-rate" style="flex: 1"></div>`;
-            }
-            html += `<div class="item-rate-amount" style="flex: 1"></div>
-                            <div class="remove-button" style="margin-top:15px;display: flex;justify-content: center;align-items: center;"></div>
-                        </div>`;
-            return html;
-          }
+        if (item_data.rate && item_data.amount && item_data.rate !== item_data.amount) {
+          return `
+					<div class="item-qty-rate">
+						<div class="item-qty"><span>${item_data.qty || 0} ${item_data.uom}</span></div>
+						<div class="item-rate-amount">
+							<div class="item-rate">${format_currency(item_data.amount, currency)}</div>
+							<div class="item-amount">${format_currency(item_data.rate, currency)}</div>
+						</div>
+					</div>`;
         } else {
-          if (item_data.rate && item_data.amount && item_data.rate !== item_data.amount) {
-            return `
-						<div class="item-qty-rate" style="flex: 4" > 
-							<div class="item-qty" style="flex: 1"><span>${item_data.qty || 0}</span></div>
-							<div class="item-qty" style="flex: 1"><span> ${item_data.uom || ""}</span></div>
-							<div class="item-qty" style="flex: 1"><span> ${item_data.batch || ""}</span></div>
-							<div class="item-rate-amount" style="flex: 1">
-								<div class="item-rate">${item_data.amount ? parseFloat(item_data.amount).toFixed(2) : "0.00"}</div>
-								<div class="item-amount">${item_data.rate ? parseFloat(item_data.rate).toFixed(2) : "0.00"}</div>
-							</div>
-						</div>`;
-          } else {
-            return `
-						<div class="item-qty-rate" style="flex: 4" >
-							<div class="item-qty" style="flex: 1" ><span>${item_data.qty || 0}</span></div>
-							<div class="item-qty" style="flex: 1"><span> ${item_data.uom || ""}</span></div>
-							<div class="item-qty" style="flex: 1"><span> ${item_data.batch || ""}</span></div>
-							<div class="item-rate-amount" style="flex: 1">
-								<div class="item-rate">${item_data.rate ? parseFloat(item_data.rate).toFixed(2) : "0.00"}</div>
-							</div>
-						</div>`;
-          }
+          return `
+					<div class="item-qty-rate">
+						<div class="item-qty"><span>${item_data.qty || 0} ${item_data.uom}</span></div>
+						<div class="item-rate-amount">
+							<div class="item-rate">${format_currency(item_data.rate, currency)}</div>
+						</div>
+					</div>`;
         }
       }
-      function get_description_html(item_data2) {
-        const hide_description = me.custom_show_item_discription;
-        if (hide_description && item_data2 && item_data2.description) {
-          let desc = item_data2.description;
-          if (typeof desc === "string" && desc.indexOf("<div>") != -1) {
+      function get_description_html() {
+        if (item_data.description) {
+          if (item_data.description.indexOf("<div>") != -1) {
             try {
-              desc = $(desc).text();
+              item_data.description = $(item_data.description).text();
             } catch (error) {
-              desc = desc.replace(/<div>/g, " ").replace(/<\/div>/g, " ").replace(/ +/g, " ");
+              item_data.description = item_data.description.replace(/<div>/g, " ").replace(/<\/div>/g, " ").replace(/ +/g, " ");
             }
           }
-          desc = frappe.ellipsis(String(desc), 45);
-          return `<div class="item-desc">${desc}</div>`;
+          item_data.description = frappe.ellipsis(item_data.description, 45);
+          return `<div class="item-desc">${item_data.description}</div>`;
         }
         return ``;
       }
-      function get_item_barcode(item_data2) {
-        const show_barcode = me.custom_show_item_barcode;
-        if (!show_barcode) {
-          return "";
-        }
-        const barcode_placeholder_id = `barcode-${item_data2.item_code.replace(/[^a-zA-Z0-9]/g, "-")}`;
-        frappe.call({
-          method: "posnext.posnext.page.posnext.point_of_sale.get_barcodes",
-          args: {
-            item_code: item_data2.item_code
-          },
-          callback: function(response) {
-            if (response.message && response.message.length > 0) {
-              const html = response.message.map((b) => `
-							<div class="item-barcode" style="font-size: 12px; color: #888;">
-								${b.barcode}
-							</div>
-						`).join("");
-              $(`#${barcode_placeholder_id}`).html(html);
-            }
-          }
-        });
-        return `<div id="${barcode_placeholder_id}" class="item-barcodes"></div>`;
-      }
       function get_item_image_html() {
-        const image = item_data && item_data.image;
-        const item_name = item_data && (item_data.item_name || "");
+        const { image, item_name } = item_data;
         if (!me.hide_images && image) {
           return `
 					<div class="item-image">
 						<img
 							onerror="cur_pos.cart.handle_broken_image(this)"
-							src="${image}" alt="${frappe.get_abbr(item_name)}">
+							src="${image}" alt="${frappe.get_abbr(item_name)}"">
 					</div>`;
         } else {
           return `<div class="item-image item-abbr">${frappe.get_abbr(item_name)}</div>`;
@@ -3147,14 +2490,16 @@ Thank you for your business!`;
         if (first_click_event || field_to_edit_changed) {
           this.prev_action = current_action;
         } else if (action_is_pressed_twice) {
-          pass;
+          this.prev_action = void 0;
         }
         this.numpad_value = "";
       } else if (current_action === "checkout") {
+        this.prev_action = void 0;
         this.toggle_item_highlight();
         this.events.numpad_event(void 0, current_action);
         return;
       } else if (current_action === "remove") {
+        this.prev_action = void 0;
         this.toggle_item_highlight();
         this.events.numpad_event(void 0, current_action);
         return;
@@ -3213,6 +2558,7 @@ Thank you for your business!`;
     }
     reset_numpad() {
       this.numpad_value = "";
+      this.prev_action = void 0;
       this.$numpad_section.find(".highlighted-numpad-btn").removeClass("highlighted-numpad-btn");
     }
     toggle_numpad_field_edit(fieldname) {
@@ -3230,7 +2576,6 @@ Thank you for your business!`;
         });
         this.$customer_section.find(".customer-details").html(
           `<div class="header">
-
 					<div class="label">Contact Details</div>
 					<div class="close-details-btn">
 						<svg width="32" height="32" viewBox="0 0 14 14" fill="none">
@@ -3313,7 +2658,7 @@ Thank you for your business!`;
         const current_customer = me.customer_info.customer;
         if (this.value && current_value != this.value && this.df.fieldname != "loyalty_points") {
           frappe.call({
-            method: "posnext.posnext.page.posnext.point_of_sale.set_customer_info",
+            method: "erpnext.selling.page.point_of_sale.point_of_sale.set_customer_info",
             args: {
               fieldname: this.df.fieldname,
               customer: current_customer,
@@ -3334,7 +2679,7 @@ Thank you for your business!`;
       }
     }
     fetch_customer_transactions() {
-      frappe.db.get_list("Sales Invoice", {
+      frappe.db.get_list("POS Invoice", {
         filters: { customer: this.customer_info.customer, docstatus: 1 },
         fields: ["name", "grand_total", "status", "posting_date", "posting_time", "currency"],
         limit: 20
@@ -3387,138 +2732,59 @@ Thank you for your business!`;
             this.update_item_html(item);
           });
         }
+        this.update_totals_section(frm);
       });
     }
     load_invoice() {
-      console.log("Load invoice");
       const frm = this.events.get_frm();
       this.attach_refresh_field_event(frm);
       this.fetch_customer_details(frm.doc.customer).then(() => {
         this.events.customer_details_updated(this.customer_info);
         this.update_customer_section();
-        this.$cart_items_wrapper.html("");
-        if (frm.doc.items.length) {
-          frm.doc.items.forEach((item) => {
-            this.update_item_html(item);
-          });
-        } else {
-          this.make_no_items_placeholder();
-          this.highlight_checkout_btn(true);
-        }
-        this.update_totals_section(frm);
-        if (frm.doc.docstatus === 1) {
-          this.$totals_section.find(".checkout-btn").css("display", "none");
-          this.$totals_section.find(".checkout-btn-held").css("display", "none");
-          if (this.show_order_list_button) {
-            this.$totals_section.find(".checkout-btn-order").css("display", "flex");
-          } else {
-            this.$totals_section.find(".checkout-btn-order").css("display", "none");
-          }
-          this.$totals_section.find(".edit-cart-btn").css("display", "none");
-        } else {
-          this.toggle_checkout_btn(true);
-        }
-        this.toggle_component(true);
       });
+      this.$cart_items_wrapper.html("");
+      if (frm.doc.items.length) {
+        frm.doc.items.forEach((item) => {
+          this.update_item_html(item);
+        });
+      } else {
+        this.make_no_items_placeholder();
+        this.highlight_checkout_btn(true);
+      }
+      this.update_totals_section(frm);
+      if (frm.doc.docstatus === 1) {
+        this.$totals_section.find(".checkout-btn").css("display", "none");
+        this.$totals_section.find(".checkout-btn-held").css("display", "none");
+        if (this.show_order_list_button) {
+          this.$totals_section.find(".checkout-btn-order").css("display", "flex");
+        } else {
+          this.$totals_section.find(".checkout-btn-order").css("display", "none");
+        }
+        this.$totals_section.find(".edit-cart-btn").css("display", "none");
+      } else {
+        if (this.show_checkout_button) {
+          this.$totals_section.find(".checkout-btn").css("display", "flex");
+        } else {
+          this.$totals_section.find(".checkout-btn").css("display", "none");
+        }
+        if (this.show_held_button) {
+          this.$totals_section.find(".checkout-btn-held").css("display", "flex");
+        } else {
+          this.$totals_section.find(".checkout-btn-held").css("display", "none");
+        }
+        if (this.show_order_list_button) {
+          this.$totals_section.find(".checkout-btn-order").css("display", "flex");
+        } else {
+          this.$totals_section.find(".checkout-btn-order").css("display", "none");
+        }
+        this.$totals_section.find(".edit-cart-btn").css("display", "none");
+      }
+      this.toggle_component(true);
     }
     toggle_component(show) {
       show ? this.$component.css("display", "flex") : this.$component.css("display", "none");
     }
-    show_reference_dialog(mobile_number = null) {
-      const me = this;
-      const dialog = new frappe.ui.Dialog({
-        title: __("Enter Reference Details"),
-        fields: [
-          {
-            fieldtype: "Data",
-            label: __("Reference Number"),
-            fieldname: "reference_no",
-            reqd: 1
-          },
-          {
-            fieldtype: "Data",
-            label: __("Reference Name"),
-            fieldname: "reference_name",
-            reqd: 1
-          }
-        ],
-        primary_action_label: __("Hold Invoice"),
-        primary_action: async (values) => {
-          if (mobile_number) {
-            await frappe.call({
-              method: "posnext.posnext.page.posnext.point_of_sale.create_customer",
-              args: { customer: mobile_number },
-              freeze: true,
-              freeze_message: "Creating Customer...."
-            });
-            const frm2 = me.events.get_frm();
-            await frappe.model.set_value(frm2.doc.doctype, frm2.doc.name, "customer", mobile_number);
-            await frm2.script_manager.trigger("customer", frm2.doc.doctype, frm2.doc.name);
-          }
-          const frm = me.events.get_frm();
-          frm.doc.custom_reference_no = values.reference_no;
-          frm.doc.custom_reference_name = values.reference_name;
-          dialog.hide();
-          await me.events.save_draft_invoice();
-        }
-      });
-      dialog.show();
-    }
-    async hold_invoice(mobile_number = null) {
-      if (mobile_number) {
-        await frappe.call({
-          method: "posnext.posnext.page.posnext.point_of_sale.create_customer",
-          args: { customer: mobile_number },
-          freeze: true,
-          freeze_message: "Creating Customer...."
-        });
-        const frm = this.events.get_frm();
-        await frappe.model.set_value(frm.doc.doctype, frm.doc.name, "customer", mobile_number);
-        await frm.script_manager.trigger("customer", frm.doc.doctype, frm.doc.name);
-      }
-      await this.events.save_draft_invoice();
-    }
   };
-  document.addEventListener("keydown", function(event) {
-    const activeElement = document.activeElement;
-    const isInputActive = activeElement.tagName === "INPUT" || activeElement.tagName === "TEXTAREA" || activeElement.isContentEditable;
-    if (event.key === "F1" && !isInputActive) {
-      event.preventDefault();
-      const checkoutButton = document.querySelector(".checkout-btn");
-      if (checkoutButton) {
-        checkoutButton.click();
-      } else {
-        console.warn("Checkout button not found!");
-      }
-    }
-    if (event.key === "F2" && !isInputActive) {
-      event.preventDefault();
-      const heldCheckoutButton = document.querySelector(".checkout-btn-held");
-      if (heldCheckoutButton) {
-        heldCheckoutButton.click();
-      } else {
-        console.warn("Held Checkout button not found!");
-      }
-    }
-    if (event.key === "F3" && !isInputActive) {
-      event.preventDefault();
-      const orderCheckoutButton = document.querySelector(".checkout-btn-order");
-      if (orderCheckoutButton) {
-        orderCheckoutButton.click();
-      } else {
-        console.warn("Order Checkout button not found!");
-      }
-    }
-    if (event.key === "F4" && !isInputActive) {
-      event.preventDefault();
-      const searchFieldButton = document.querySelector(".search-field button");
-      if (searchFieldButton) {
-        searchFieldButton.click();
-      } else {
-        console.warn("Search field button not found!");
-      }
-    }
-  });
 
   // ../posnext/posnext/public/js/pos_item_details.js
   frappe.provide("posnext.PointOfSale");
@@ -3529,7 +2795,6 @@ Thank you for your business!`;
       this.hide_images = settings.hide_images;
       this.allow_rate_change = settings.allow_rate_change;
       this.allow_discount_change = settings.allow_discount_change;
-      this.custom_edit_rate_and_uom = settings.custom_edit_rate_and_uom;
       this.current_item = {};
       this.init_component();
     }
@@ -3548,7 +2813,7 @@ Thank you for your business!`;
     init_child_components() {
       this.$component.html(
         `<div class="item-details-header">
-				<div class="label">${__("Item Detailss")}</div>
+				<div class="label">${__("Item Details")}</div>
 				<div class="close-btn">
 					<svg width="32" height="32" viewBox="0 0 14 14" fill="none">
 						<path d="M4.93764 4.93759L7.00003 6.99998M9.06243 9.06238L7.00003 6.99998M7.00003 6.99998L4.93764 9.06238L9.06243 4.93759" stroke="#8D99A6"/>
@@ -3584,10 +2849,8 @@ Thank you for your business!`;
       if (!hide_item_details && current_item_changed || hide_item_details) {
         await this.validate_serial_batch_item();
       }
-      if (!this.custom_edit_rate_and_uom) {
-        this.events.toggle_item_selector(!hide_item_details);
-        this.toggle_component(!hide_item_details);
-      }
+      this.events.toggle_item_selector(!hide_item_details);
+      this.toggle_component(!hide_item_details);
       if (item && current_item_changed) {
         this.doctype = item.doctype;
         this.item_meta = frappe.get_meta(this.doctype);
@@ -3669,24 +2932,10 @@ Thank you for your business!`;
         const field_meta = this.item_meta.fields.find((df) => df.fieldname === fieldname);
         fieldname === "discount_percentage" ? field_meta.label = __("Discount (%)") : "";
         const me = this;
-        var uoms = [];
-        frappe.db.get_doc("Item", me.current_item.item_code).then((doc) => {
-          uoms = doc.uoms.map((item2) => item2.uom);
-        });
         this[`${fieldname}_control`] = frappe.ui.form.make_control({
           df: __spreadProps(__spreadValues({}, field_meta), {
             onchange: function() {
               me.events.form_updated(me.current_item, fieldname, this.value);
-            },
-            get_query: function() {
-              if (fieldname === "uom") {
-                return {
-                  filters: {
-                    name: ["in", uoms]
-                  }
-                };
-              }
-              return;
             }
           }),
           parent: this.$form_container.find(`.${fieldname}-control`),
@@ -3928,49 +3177,32 @@ Thank you for your business!`;
   // ../posnext/posnext/public/js/pos_payment.js
   frappe.provide("posnext.PointOfSale");
   posnext.PointOfSale.Payment = class {
-    constructor({ events, wrapper, settings }) {
+    constructor({ events, wrapper }) {
       this.wrapper = wrapper;
       this.events = events;
-      this.custom_show_sales_man = settings.custom_show_sales_man;
-      this.custom_show_additional_note = settings.custom_show_additional_note;
-      this.custom_edit_rate = settings.custom_edit_rate_and_uom;
-      this.custom_show_credit_sales = settings.custom_show_credit_sales;
-      this.default_payment = settings.default_payment;
-      this.current_payments = [];
-      this.enable_coupon_code = settings.enable_coupon_code;
       this.init_component();
-      if (this.enable_coupon_code) {
-        this.render_coupon_code_field();
-      }
     }
     init_component() {
       this.prepare_dom();
+      this.initialize_numpad();
       this.bind_events();
       this.attach_shortcuts();
     }
     prepare_dom() {
       this.wrapper.append(
-        `<section class="payment-container" style="grid-column: span 5 / span 5;">
+        `<section class="payment-container">
 				<div class="section-label payment-section">${__("Payment Method")}</div>
 				<div class="payment-modes"></div>
 				<div class="fields-numpad-container">
-					
+					<div class="fields-section">
+						<div class="section-label">${__("Additional Information")}</div>
+						<div class="invoice-fields"></div>
+					</div>
+					<div class="number-pad"></div>
 				</div>
 				<div class="totals-section">
 					<div class="totals"></div>
 				</div>
-				<div class="edit-cart-btn-payment" style="
-					padding: 12px;
-					margin: 10px 0;
-					text-align: center;
-					background-color: #e2e2e2;
-					color: var(--text-color);
-					border: 1px solid var(--gray-300);
-					border-radius: 5px;
-					cursor: pointer;
-					font-weight: 500;
-					transition: all 0.2s ease;
-				">${__("Edit Cart")}</div>
 				<div class="submit-order-btn">${__("Complete Order")}</div>
 			</section>`
       );
@@ -3978,104 +3210,42 @@ Thank you for your business!`;
       this.$payment_modes = this.$component.find(".payment-modes");
       this.$totals_section = this.$component.find(".totals-section");
       this.$totals = this.$component.find(".totals");
-      this.$coupon_code = this.$component.find(".coupon-code");
+      this.$numpad = this.$component.find(".number-pad");
       this.$invoice_fields_section = this.$component.find(".fields-section");
-      this.$edit_cart_btn = this.$component.find(".edit-cart-btn-payment");
-    }
-    render_coupon_code_field() {
-      frappe.ui.form.make_control({
-        df: {
-          label: __("Coupon Code"),
-          fieldtype: "Link",
-          options: "Coupon Code",
-          fieldname: "coupon_code",
-          placeholder: __("Select a coupon")
-        },
-        parent: this.$component.find(".coupon-code"),
-        render_input: true
-      });
     }
     make_invoice_fields_control() {
-      var me = this;
-      const fields = [];
-      if (this.custom_show_credit_sales) {
-        fields.push({
-          fieldname: "custom_credit_sales",
-          label: "Credit Sales",
-          fieldtype: "Check"
-        });
-      }
-      if (this.custom_show_sales_man) {
-        fields.push({
-          fieldname: "sales_person",
-          label: "Sales Man",
-          fieldtype: "Link",
-          options: "Sales Person"
-        });
-      }
-      if (this.custom_show_additional_note) {
-        fields.push({
-          fieldname: "remarks",
-          label: "Additional Note",
-          fieldtype: "Small Text"
-        });
-      }
-      if (!fields.length)
-        return;
-      this.$invoice_fields = this.$invoice_fields_section.find(".invoice-fields");
-      this.$invoice_fields.html("");
-      const frm = this.events.get_frm();
-      me.current_payments = frm.doc.payments;
-      fields.forEach((df) => {
-        this.$invoice_fields.append(
-          `<div class="invoice_detail_field ${df.fieldname}-field" data-fieldname="${df.fieldname}"></div>`
-        );
-        let df_events = {
-          onchange: function() {
-            if (this.df.fieldname === "sales_person") {
-              frm.clear_table("sales_team");
-              cur_frm.add_child("sales_team", {
-                sales_person: this.get_value(),
-                allocated_percentage: 100
-              });
-            } else {
-              if (this.df.fieldname === "custom_credit_sales") {
-                if (this.get_value()) {
-                  frm.doc.payments.forEach((p) => {
-                    const mode = p.mode_of_payment.replace(/ +/g, "_").toLowerCase();
-                    me[`${mode}_control`].set_value(0);
-                  });
-                } else {
-                  console.log(me.current_payments);
-                  me.current_payments.forEach((p) => {
-                    if (p.mode_of_payment === me.default_payment) {
-                      const mode = p.mode_of_payment.replace(/ +/g, "_").toLowerCase();
-                      me[`${mode}_control`].set_value(frm.doc.grand_total);
-                    }
-                  });
-                }
-              }
+      frappe.db.get_doc("POS Settings", void 0).then((doc) => {
+        const fields = doc.invoice_fields;
+        if (!fields.length)
+          return;
+        this.$invoice_fields = this.$invoice_fields_section.find(".invoice-fields");
+        this.$invoice_fields.html("");
+        const frm = this.events.get_frm();
+        fields.forEach((df) => {
+          this.$invoice_fields.append(
+            `<div class="invoice_detail_field ${df.fieldname}-field" data-fieldname="${df.fieldname}"></div>`
+          );
+          let df_events = {
+            onchange: function() {
               frm.set_value(this.df.fieldname, this.get_value());
             }
-          }
-        };
-        if (df.fieldtype == "Button") {
-          df_events = {
-            click: function() {
-              if (frm.script_manager.has_handlers(df.fieldname, frm.doc.doctype)) {
-                frm.script_manager.trigger(df.fieldname, frm.doc.doctype, frm.doc.docname);
-              }
-            }
           };
-        }
-        this[`${df.fieldname}_field`] = frappe.ui.form.make_control({
-          df: __spreadValues(__spreadValues({}, df), df_events),
-          parent: this.$invoice_fields.find(`.${df.fieldname}-field`),
-          render_input: true
-        });
-        if (df.fieldname !== "remarks") {
+          if (df.fieldtype == "Button") {
+            df_events = {
+              click: function() {
+                if (frm.script_manager.has_handlers(df.fieldname, frm.doc.doctype)) {
+                  frm.script_manager.trigger(df.fieldname, frm.doc.doctype, frm.doc.docname);
+                }
+              }
+            };
+          }
+          this[`${df.fieldname}_field`] = frappe.ui.form.make_control({
+            df: __spreadValues(__spreadValues({}, df), df_events),
+            parent: this.$invoice_fields.find(`.${df.fieldname}-field`),
+            render_input: true
+          });
           this[`${df.fieldname}_field`].set_value(frm.doc[df.fieldname]);
-        }
+        });
       });
     }
     initialize_numpad() {
@@ -4098,6 +3268,17 @@ Thank you for your business!`;
       this.numpad_value = "";
     }
     on_numpad_clicked($btn) {
+      const button_value = $btn.attr("data-button-value");
+      highlight_numpad_btn($btn);
+      this.numpad_value = button_value === "delete" ? this.numpad_value.slice(0, -1) : this.numpad_value + button_value;
+      this.selected_mode.$input.get(0).focus();
+      this.selected_mode.set_value(this.numpad_value);
+      function highlight_numpad_btn($btn2) {
+        $btn2.addClass("shadow-base-inner bg-selected");
+        setTimeout(() => {
+          $btn2.removeClass("shadow-base-inner bg-selected");
+        }, 100);
+      }
     }
     bind_events() {
       const me = this;
@@ -4165,13 +3346,9 @@ Thank you for your business!`;
       });
       this.$component.on("click", ".submit-order-btn", () => {
         const doc = this.events.get_frm().doc;
-        let paid_amount = doc.paid_amount;
-        if (cur_frm.doc.custom_credit_sales && this.custom_show_credit_sales) {
-          cur_frm.clear_table("payments");
-          paid_amount = 0;
-        }
+        const paid_amount = doc.paid_amount;
         const items = doc.items;
-        if ((paid_amount == 0 || !items.length) && !this.custom_show_credit_sales) {
+        if (paid_amount == 0 || !items.length) {
           const message = items.length ? __("You cannot submit the order without payment.") : __("You cannot submit empty order.");
           frappe.show_alert({ message, indicator: "orange" });
           frappe.utils.play_sound("error");
@@ -4179,23 +3356,6 @@ Thank you for your business!`;
         }
         this.events.submit_invoice();
       });
-      this.$edit_cart_btn.on("click", () => {
-        this.edit_cart();
-      });
-      this.$edit_cart_btn.hover(
-        function() {
-          $(this).css({
-            "background-color": "var(--gray-200)",
-            "border-color": "var(--gray-400)"
-          });
-        },
-        function() {
-          $(this).css({
-            "background-color": "var(--gray-100)",
-            "border-color": "var(--gray-300)"
-          });
-        }
-      );
       frappe.ui.form.on("POS Invoice", "paid_amount", (frm) => {
         this.update_totals_section(frm.doc);
         const is_cash_shortcuts_invisible = !this.$payment_modes.find(".cash-shortcuts").is(":visible");
@@ -4292,10 +3452,6 @@ Thank you for your business!`;
       frm.script_manager.trigger("after_payment_render", frm.doc.doctype, frm.doc.docname);
     }
     edit_cart() {
-      if (this.custom_edit_rate) {
-        const div = document.getElementById("customer-cart-container2");
-        div.style.gridColumn = "span 5 / span 5";
-      }
       this.events.toggle_other_sections(false);
       this.toggle_component(false);
     }
@@ -4304,7 +3460,6 @@ Thank you for your business!`;
       this.toggle_component(true);
       this.render_payment_section();
       this.after_render();
-      this.events.show_edit_cart_btn();
     }
     toggle_remarks_control() {
       if (this.$remarks.find(".frappe-control").length) {
@@ -4343,7 +3498,6 @@ Thank you for your business!`;
 					</div>
 				`;
       }).join("")}`);
-      this.current_payments = payments;
       payments.forEach((p) => {
         const mode = p.mode_of_payment.replace(/ +/g, "_").toLowerCase();
         const me = this;
@@ -4353,8 +3507,6 @@ Thank you for your business!`;
             fieldtype: "Currency",
             placeholder: __("Enter {0} amount.", [p.mode_of_payment]),
             onchange: function() {
-              console.log(p.doctype);
-              console.log(p.name);
               const current_value = frappe.model.get_value(p.doctype, p.name, "amount");
               if (current_value != this.value) {
                 frappe.model.set_value(p.doctype, p.name, "amount", flt(this.value)).then(() => me.update_totals_section());
@@ -4478,12 +3630,7 @@ Thank you for your business!`;
     update_totals_section(doc) {
       if (!doc)
         doc = this.events.get_frm().doc;
-      let branch_value = $('.input-with-feedback[data-fieldname="branch"]').val();
-      frappe.model.set_value(cur_frm.doctype, cur_frm.docname, "branch", branch_value);
       const paid_amount = doc.paid_amount;
-      if (cur_frm.doc.custom_credit_sales) {
-        const paid_amount2 = 0;
-      }
       const grand_total = cint(frappe.sys_defaults.disable_rounded_total) ? doc.grand_total : doc.rounded_total;
       const remaining = grand_total - doc.paid_amount;
       const change = doc.change_amount || remaining <= 0 ? -1 * remaining : void 0;
@@ -4515,11 +3662,9 @@ Thank you for your business!`;
   frappe.provide("posnext.PointOfSale");
   var invoicess = [];
   posnext.PointOfSale.PastOrderList = class {
-    constructor({ wrapper, events, settings }) {
+    constructor({ wrapper, events }) {
       this.wrapper = wrapper;
       this.events = events;
-      this.pos_profile = settings.name;
-      this.custom_filter_order_list_by_profile = settings.custom_filter_order_list_by_profile;
       this.init_component();
     }
     init_component() {
@@ -4557,23 +3702,9 @@ Thank you for your business!`;
         }, 300);
       });
       const me = this;
-      this.$invoices_container.on("click", ".invoice-wrapper", function(e) {
-        if ($(e.target).hasClass("go-order-btn")) {
-          return;
-        }
+      this.$invoices_container.on("click", ".invoice-wrapper", function() {
         const invoice_name = unescape($(this).attr("data-invoice-name"));
         me.events.open_invoice_data(invoice_name);
-      });
-      this.$invoices_container.on("click", ".go-order-btn", function(e) {
-        e.stopPropagation();
-        const order_name = unescape($(this).attr("data-order-name"));
-        frappe.set_route("Form", "Sales Order", order_name);
-      });
-      this.$invoices_container.on("mouseenter", ".go-order-btn", function() {
-        $(this).css("background-color", "#1976d2");
-      });
-      this.$invoices_container.on("mouseleave", ".go-order-btn", function() {
-        $(this).css("background-color", "#2490ef");
       });
       this.$component.on("click", ".back", function() {
         me.events.previous_screen();
@@ -4585,23 +3716,20 @@ Thank you for your business!`;
         df: {
           label: __("Search"),
           fieldtype: "Data",
-          placeholder: __("Search by order id or customer name")
+          placeholder: __("Search by invoice id or customer name")
         },
         parent: this.$component.find(".search-field"),
         render_input: true
       });
       this.status_field = frappe.ui.form.make_control({
         df: {
-          label: __("Order Status"),
+          label: __("Invoice Status"),
           fieldtype: "Select",
           options: `Draft
-To Deliver and Bill
-To Bill
-To Deliver
-Completed
-Cancelled
-Closed`,
-          placeholder: __("Filter by order status"),
+Paid
+Consolidated
+Return`,
+          placeholder: __("Filter by invoice status"),
           onchange: function() {
             if (me.$component.is(":visible"))
               me.refresh_list();
@@ -4619,22 +3747,17 @@ Closed`,
       this.events.reset_summary();
       const search_term = this.search_field.get_value();
       const status = this.status_field.get_value();
-      const pos_profile = this.pos_profile;
       this.$invoices_container.html("");
-      let filter = { search_term, status };
-      if (this.custom_filter_order_list_by_profile) {
-        filter = { search_term, status, pos_profile };
-      }
       return frappe.call({
-        method: "posnext.posnext.page.posnext.point_of_sale.get_past_order_list",
+        method: "erpnext.selling.page.point_of_sale.point_of_sale.get_past_order_list",
         freeze: true,
-        args: filter,
+        args: { search_term, status },
         callback: (response) => {
           frappe.dom.unfreeze();
           invoicess = response.message;
-          response.message.forEach((order) => {
-            const order_html = this.get_invoice_html(order);
-            this.$invoices_container.append(order_html);
+          response.message.forEach((invoice) => {
+            const invoice_html = this.get_invoice_html(invoice);
+            this.$invoices_container.append(invoice_html);
           });
         }
       });
@@ -4654,20 +3777,6 @@ Closed`,
 				<div class="invoice-total-status">
 					<div class="invoice-total">${format_currency(invoice.grand_total, invoice.currency, 0) || 0}</div>
 					<div class="invoice-date">${posting_datetime}</div>
-				</div>
-				<div class="go-order-btn" data-order-name="${escape(invoice.name)}" style="
-					margin-top: 8px;
-					padding: 6px 12px;
-					background-color: #2490ef;
-					color: white;
-					text-align: center;
-					border-radius: 4px;
-					cursor: pointer;
-					font-size: 12px;
-					font-weight: 500;
-					transition: background-color 0.2s;
-				">
-					Go to Order
 				</div>
 			</div>
 			<div class="seperator"></div>`;
@@ -4841,37 +3950,25 @@ Closed`,
         this.show_summary_placeholder();
       });
       this.$summary_container.on("click", ".send-btn", () => {
-        if (!this.pos_profile.custom_notification_message_whatsapp) {
-          frappe.show_alert({
-            message: __("WhatsApp notification is not enabled in POS Profile"),
-            indicator: "orange"
-          });
-          return;
-        }
-        if (!this.doc.customer) {
-          frappe.throw(__("Please select a customer first"));
-          return;
-        }
-        frappe.db.get_value("Customer", this.doc.customer, "mobile_no").then(({ message }) => {
-          if (message.mobile_no) {
-            const mobile_no = message.mobile_no.replace(/[^0-9]/g, "");
-            const whatsapp_message = "https://wa.me/" + mobile_no + "?text=";
-            const print_url = frappe.urllib.get_full_url(
-              "/printview?doctype=" + encodeURIComponent(this.doc.doctype) + "&name=" + encodeURIComponent(this.doc.name) + "&format=" + encodeURIComponent(this.pos_profile.print_format) + "&no_letterhead=0&_lang=" + encodeURIComponent(frappe.boot.lang) + "&trigger_print=1"
-            );
-            const final_message = whatsapp_message + encodeURIComponent("Please find your invoice here \n" + print_url);
-            window.open(final_message);
-          } else {
-            var field_values = this.pos_profile.custom_whatsapp_field_names.map((x) => this.doc[x.field_name]);
-            var message_body = formatString(this.pos_profile.custom_whatsapp_message, field_values);
-            const print_url = frappe.urllib.get_full_url(
-              "/printview?doctype=" + encodeURIComponent(this.doc.doctype) + "&name=" + encodeURIComponent(this.doc.name) + "&format=" + encodeURIComponent(this.pos_profile.print_format) + "&no_letterhead=0&_lang=" + encodeURIComponent(frappe.boot.lang) + "&trigger_print=1"
-            );
-            message_body += "\n\nPlease find your invoice here:\n" + print_url;
-            var encoded_message = encodeURIComponent(message_body);
-            var phone_number = this.doc.customer;
-            var whatsapp_url = "https://wa.me/" + phone_number + "?text=" + encoded_message;
-            window.open(whatsapp_url, "_blank");
+        console.log(this.pos_profile);
+        var field_names = this.pos_profile.custom_whatsapp_field_names.map((x) => this.doc[x.field_names.toString()]);
+        console.log(field_names);
+        console.log(field_names.join(","));
+        var message = "https://wa.me/" + this.doc.customer + "?text=";
+        message += formatString(this.pos_profile.custom_whatsapp_message, field_names);
+        console.log(message);
+        frappe.call({
+          method: "posnext.posnext.page.posnext.point_of_sale.generate_pdf_and_save",
+          args: {
+            docname: this.doc.name,
+            doctype: this.doc.doctype,
+            print_format: this.pos_profile.print_format
+          },
+          freeze: true,
+          freeze_message: "Creating file then send to whatsapp thru link....",
+          callback: function(r) {
+            message += "Please Find your invoice here \n " + window.origin + r.message.file_url;
+            window.open(message);
           }
         });
       });
@@ -5014,9 +4111,6 @@ Closed`,
       const condition_btns_map = this.get_condition_btn_map(after_submission);
       this.add_summary_btns(condition_btns_map);
       this.$summary_wrapper.css("width", after_submission ? "35%" : "60%");
-      if (after_submission) {
-        this.print_receipt_on_order_complete();
-      }
     }
     attach_document_info(doc) {
       frappe.db.get_value("Customer", this.doc.customer, "email_id").then(({ message }) => {
@@ -5076,18 +4170,6 @@ Closed`,
     toggle_component(show) {
       show ? this.$component.css("display", "flex") : this.$component.css("display", "none");
     }
-    async print_receipt_on_order_complete() {
-      var _a;
-      const profile_name = ((_a = this.pos_profile) == null ? void 0 : _a.name) || this.pos_profile;
-      const { message } = await frappe.db.get_value(
-        "POS Profile",
-        profile_name,
-        ["print_receipt_on_order_complete", "print_format"]
-      );
-      if (message == null ? void 0 : message.print_receipt_on_order_complete) {
-        setTimeout(() => this.print_receipt(), 300);
-      }
-    }
   };
 })();
-//# sourceMappingURL=posnext.bundle.R5UYNW2U.js.map
+//# sourceMappingURL=posnext.bundle.QDPOHWVP.js.map

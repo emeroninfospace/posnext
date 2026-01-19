@@ -1,27 +1,16 @@
 /* eslint-disable no-unused-vars */
 frappe.provide('posnext.PointOfSale');
 posnext.PointOfSale.Payment = class {
-	constructor({ events, wrapper, settings }) {
+	constructor({ events, wrapper }) {
 		this.wrapper = wrapper;
 		this.events = events;
-		this.custom_show_sales_man = settings.custom_show_sales_man
-		this.custom_show_additional_note = settings.custom_show_additional_note
-		this.custom_edit_rate = settings.custom_edit_rate_and_uom
-		this.custom_show_credit_sales = settings.custom_show_credit_sales
-		this.default_payment = settings.default_payment
-		this.current_payments = []
-		this.enable_coupon_code = settings.enable_coupon_code
 
 		this.init_component();
-		// this.init_component();
-		if (this.enable_coupon_code){
-			this.render_coupon_code_field();
-		}
 	}
 
 	init_component() {
 		this.prepare_dom();
-		// this.initialize_numpad(); // Numpad removed from payment section
+		this.initialize_numpad();
 		this.bind_events();
 		this.attach_shortcuts();
 
@@ -29,133 +18,46 @@ posnext.PointOfSale.Payment = class {
 
 	prepare_dom() {
 		this.wrapper.append(
-			`<section class="payment-container" style="grid-column: span 5 / span 5;">
+			`<section class="payment-container">
 				<div class="section-label payment-section">${__('Payment Method')}</div>
 				<div class="payment-modes"></div>
 				<div class="fields-numpad-container">
-					
+					<div class="fields-section">
+						<div class="section-label">${__('Additional Information')}</div>
+						<div class="invoice-fields"></div>
+					</div>
+					<div class="number-pad"></div>
 				</div>
-
-				<div class="edit-cart-btn-payment" style="
-					padding: 12px;
-					margin: 10px 0;
-					text-align: center;
-					background-color: #e2e2e2;
-					color: var(--text-color);
-					border: 1px solid var(--gray-300);
-					border-radius: 5px;
-					cursor: pointer;
-					font-weight: 500;
-					transition: all 0.2s ease;
-				">${__('Edit Cart')}</div>
-
+				<div class="totals-section">
+					<div class="totals"></div>
+				</div>
 				<div class="submit-order-btn">${__("Complete Order")}</div>
 			</section>`
 		);
-	
 		this.$component = this.wrapper.find('.payment-container');
 		this.$payment_modes = this.$component.find('.payment-modes');
 		this.$totals_section = this.$component.find('.totals-section');
 		this.$totals = this.$component.find('.totals');
-		this.$coupon_code = this.$component.find('.coupon-code');
+		this.$numpad = this.$component.find('.number-pad');
 		this.$invoice_fields_section = this.$component.find('.fields-section');
-		this.$edit_cart_btn = this.$component.find('.edit-cart-btn-payment');
 	}
-	
-	render_coupon_code_field() {
-		frappe.ui.form.make_control({
-			df: {
-				label: __('Coupon Code'),
-				fieldtype: 'Link',
-				options: 'Coupon Code',
-				fieldname: 'coupon_code',
-				placeholder: __('Select a coupon'),
-			},
-			parent: this.$component.find('.coupon-code'),
-			render_input: true
-		});
-	}
-	
 
 	make_invoice_fields_control() {
-		// frappe.db.get_doc("POS Settings", undefined).then((doc) => {
-			var me = this
-			const fields = [];
-			if(this.custom_show_credit_sales){
-				fields.push({
-					fieldname: "custom_credit_sales",
-					label: "Credit Sales",
-					fieldtype: "Check",
-				})
-				// fields.push({
-				// 	fieldname: "custom_credit_sales_date",
-				// 	label: "Credit Sales Date",
-				// 	fieldtype: "Date"
-				// })
-			}
-			if(this.custom_show_sales_man){
-				fields.push({
-					fieldname: "sales_person",
-					label: "Sales Man",
-					fieldtype: "Link",
-					options: "Sales Person",
-				})
-			}
-			if(this.custom_show_additional_note){
-				fields.push({
-					fieldname: "remarks",
-					label: "Additional Note",
-					fieldtype: "Small Text",
-				})
-			}
-
+		frappe.db.get_doc("POS Settings", undefined).then((doc) => {
+			const fields = doc.invoice_fields;
 			if (!fields.length) return;
+
 			this.$invoice_fields = this.$invoice_fields_section.find('.invoice-fields');
 			this.$invoice_fields.html('');
 			const frm = this.events.get_frm();
-			me.current_payments = frm.doc.payments
+
 			fields.forEach(df => {
 				this.$invoice_fields.append(
 					`<div class="invoice_detail_field ${df.fieldname}-field" data-fieldname="${df.fieldname}"></div>`
 				);
 				let df_events = {
 					onchange: function() {
-						if(this.df.fieldname === 'sales_person'){
-							frm.clear_table("sales_team")
-							cur_frm.add_child("sales_team", {
-								sales_person: this.get_value(),
-								allocated_percentage: 100,
-							})
-						} else {
-							if(this.df.fieldname === 'custom_credit_sales'){
-								// $('input[data-fieldname="custom_credit_sales_date"]').css("pointer-events",this.get_value() ? "" : "none")
-								if(this.get_value()){
-									// $('input[data-fieldname="custom_credit_sales_date"]').removeAttr('readonly')
-
-									frm.doc.payments.forEach(p => {
-										const mode = p.mode_of_payment.replace(/ +/g, "_").toLowerCase();
-										me[`${mode}_control`].set_value(0);
-									})
-								} else {
-									console.log(me.current_payments)
-									// $('input[data-fieldname="custom_credit_sales_date"]').attr('readonly', true);
-									me.current_payments.forEach(p => {
-										if(p.mode_of_payment === me.default_payment){
-											const mode = p.mode_of_payment.replace(/ +/g, "_").toLowerCase();
-											me[`${mode}_control`].set_value(frm.doc.grand_total);
-										}
-
-									})
-								}
-							}
-							frm.set_value(this.df.fieldname, this.get_value());
-						}
-		// 				if(this.df.fieldname === 'custom_credit_sales' && this.get_value()){
-		// 					console.log("SELECTEEED MODE")
-		// console.log(me.$payment_modes)
-		// 					this.selected_mode.set_value(0);
-		// 				}
-
+						frm.set_value(this.df.fieldname, this.get_value());
 					}
 				};
 				if (df.fieldtype == "Button") {
@@ -176,14 +78,9 @@ posnext.PointOfSale.Payment = class {
 					parent: this.$invoice_fields.find(`.${df.fieldname}-field`),
 					render_input: true,
 				});
-				if(df.fieldname !== 'remarks'){
-					this[`${df.fieldname}_field`].set_value(frm.doc[df.fieldname]);
-				}
-				// if(df.fieldname === 'custom_credit_sales_date'){
-				// 	this[`${df.fieldname}_field`].set_value(frappe.datetime.get_today());
-				// }
+				this[`${df.fieldname}_field`].set_value(frm.doc[df.fieldname]);
 			});
-		// });
+		});
 	}
 
 	initialize_numpad() {
@@ -208,20 +105,19 @@ posnext.PointOfSale.Payment = class {
 	}
 
 	on_numpad_clicked($btn) {
-		// Numpad removed - method kept for compatibility
-		// const button_value = $btn.attr('data-button-value');
+		const button_value = $btn.attr('data-button-value');
 
-		// highlight_numpad_btn($btn);
-		// this.numpad_value = button_value === 'delete' ? this.numpad_value.slice(0, -1) : this.numpad_value + button_value;
-		// this.selected_mode.$input.get(0).focus();
-		// this.selected_mode.set_value(this.numpad_value);
+		highlight_numpad_btn($btn);
+		this.numpad_value = button_value === 'delete' ? this.numpad_value.slice(0, -1) : this.numpad_value + button_value;
+		this.selected_mode.$input.get(0).focus();
+		this.selected_mode.set_value(this.numpad_value);
 
-		// function highlight_numpad_btn($btn) {
-		// 	$btn.addClass('shadow-base-inner bg-selected');
-		// 	setTimeout(() => {
-		// 		$btn.removeClass('shadow-base-inner bg-selected');
-		// 	}, 100);
-		// }
+		function highlight_numpad_btn($btn) {
+			$btn.addClass('shadow-base-inner bg-selected');
+			setTimeout(() => {
+				$btn.removeClass('shadow-base-inner bg-selected');
+			}, 100);
+		}
 	}
 
 	bind_events() {
@@ -305,15 +201,10 @@ posnext.PointOfSale.Payment = class {
 
 		this.$component.on('click', '.submit-order-btn', () => {
 			const doc = this.events.get_frm().doc;
-			let paid_amount = doc.paid_amount
-			if(cur_frm.doc.custom_credit_sales && this.custom_show_credit_sales){
-				cur_frm.clear_table("payments")
-				paid_amount = 0;
-			}
-
+			const paid_amount = doc.paid_amount;
 			const items = doc.items;
 
-			if ((paid_amount == 0 || !items.length) && !this.custom_show_credit_sales) {
+			if (paid_amount == 0 || !items.length) {
 				const message = items.length ? __("You cannot submit the order without payment.") : __("You cannot submit empty order.");
 				frappe.show_alert({ message, indicator: "orange" });
 				frappe.utils.play_sound("error");
@@ -322,27 +213,6 @@ posnext.PointOfSale.Payment = class {
 
 			this.events.submit_invoice();
 		});
-
-		// Edit Cart button in payment section
-		this.$edit_cart_btn.on('click', () => {
-			this.edit_cart();
-		});
-
-		// Add hover effects for Edit Cart button
-		this.$edit_cart_btn.hover(
-			function() {
-				$(this).css({
-					'background-color': 'var(--gray-200)',
-					'border-color': 'var(--gray-400)'
-				});
-			},
-			function() {
-				$(this).css({
-					'background-color': 'var(--gray-100)',
-					'border-color': 'var(--gray-300)'
-				});
-			}
-		);
 
 		frappe.ui.form.on('POS Invoice', 'paid_amount', (frm) => {
 			this.update_totals_section(frm.doc);
@@ -459,11 +329,6 @@ posnext.PointOfSale.Payment = class {
 	}
 
 	edit_cart() {
-		if(this.custom_edit_rate){
-			const div = document.getElementById("customer-cart-container2");
-			div.style.gridColumn = "span 5 / span 5";
-		}
-
 		this.events.toggle_other_sections(false);
 		this.toggle_component(false);
 	}
@@ -474,9 +339,6 @@ posnext.PointOfSale.Payment = class {
 
 		this.render_payment_section();
 		this.after_render();
-		
-		// Show "Edit Cart" button when payment screen is visible
-		this.events.show_edit_cart_btn();
 	}
 
 	toggle_remarks_control() {
@@ -520,7 +382,7 @@ posnext.PointOfSale.Payment = class {
 				`);
 			}).join('')
 		}`);
-		this.current_payments = payments
+
 		payments.forEach(p => {
 			const mode = p.mode_of_payment.replace(/ +/g, "_").toLowerCase();
 			const me = this;
@@ -530,8 +392,6 @@ posnext.PointOfSale.Payment = class {
 					fieldtype: 'Currency',
 					placeholder: __('Enter {0} amount.', [p.mode_of_payment]),
 					onchange: function() {
-						console.log(p.doctype)
-						console.log(p.name)
 						const current_value = frappe.model.get_value(p.doctype, p.name, 'amount');
 						if (current_value != this.value) {
 							frappe.model
@@ -678,15 +538,7 @@ posnext.PointOfSale.Payment = class {
 
 	update_totals_section(doc) {
 		if (!doc) doc = this.events.get_frm().doc;
-		let branch_value = $('.input-with-feedback[data-fieldname="branch"]').val();
-		frappe.model.set_value(cur_frm.doctype, cur_frm.docname, 'branch', branch_value);
-		// cur_frm.save()
-		// doc.paid_amount = doc.grand_total
-			const paid_amount = doc.paid_amount;
-
-		if(cur_frm.doc.custom_credit_sales){
-			const paid_amount = 0
-		}
+		const paid_amount = doc.paid_amount;
 		const grand_total = cint(frappe.sys_defaults.disable_rounded_total) ? doc.grand_total : doc.rounded_total;
 		const remaining = grand_total - doc.paid_amount;
 		const change = doc.change_amount || remaining <= 0 ? -1 * remaining : undefined;

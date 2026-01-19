@@ -6,7 +6,7 @@ import json
 from typing import Dict, Optional
 
 import frappe
-from frappe.utils import cint, get_datetime
+from frappe.utils import cint
 from frappe.utils.nestedset import get_root_of
 
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import get_stock_availability
@@ -14,22 +14,22 @@ from erpnext.accounts.doctype.pos_profile.pos_profile import get_child_nodes, ge
 from erpnext.stock.utils import scan_barcode
 
 
-def search_by_term(search_term,custom_show_alternative_item_for_pos_search, warehouse, price_list):
+def search_by_term(search_term, warehouse, price_list):
 	result = search_for_serial_or_batch_or_barcode_number(search_term) or {}
 
-	item_code = result.get("item_code", "")
+	item_code = result.get("item_code", search_term)
 	serial_no = result.get("serial_no", "")
 	batch_no = result.get("batch_no", "")
 	barcode = result.get("barcode", "")
 
 	if not result:
 		return
-	print("RESSSSULT")
-	print(result)
+
 	item_doc = frappe.get_doc("Item", item_code)
 
 	if not item_doc:
 		return
+
 	item = {
 		"barcode": barcode,
 		"batch_no": batch_no,
@@ -41,8 +41,6 @@ def search_by_term(search_term,custom_show_alternative_item_for_pos_search, ware
 		"serial_no": serial_no,
 		"stock_uom": item_doc.stock_uom,
 		"uom": item_doc.stock_uom,
-		"item_uoms": frappe.db.get_all("UOM Conversion Detail", {"parent": item_doc.item_code}, ["uom"], pluck="uom"),
-		"custom_is_promo": item_doc.get("custom_is_promo", 0)
 	}
 
 	if barcode:
@@ -92,62 +90,46 @@ def search_by_term(search_term,custom_show_alternative_item_for_pos_search, ware
 			}
 		)
 
-
 	return {"items": [item]}
 
 
 @frappe.whitelist()
 def get_items(start, page_length, price_list, item_group, pos_profile, search_term=""):
-	warehouse, hide_unavailable_items,custom_show_last_incoming_rate, custom_show_alternative_item_for_pos_search,custom_show_logical_rack, custom_skip_stock_transaction_validation = frappe.db.get_value(
-		"POS Profile", pos_profile, ["warehouse", "hide_unavailable_items","custom_show_last_incoming_rate","custom_show_alternative_item_for_pos_search","custom_show_logical_rack", "custom_skip_stock_transaction_validation"]
+	warehouse, hide_unavailable_items = frappe.db.get_value(
+		"POS Profile", pos_profile, ["warehouse", "hide_unavailable_items"]
 	)
 
 	result = []
 
 	if search_term:
-		result = search_by_term(search_term,custom_show_alternative_item_for_pos_search, warehouse, price_list) or []
+		result = search_by_term(search_term, warehouse, price_list) or []
 		if result:
 			return result
-	alt_items = []
-	if custom_show_alternative_item_for_pos_search:
-		alt_items = frappe.db.sql(""" SELECT * FROM `tabAlternative Items` 
- 									WHERE parent like %s or parent_item_name like %s or parent_item_description like %s or parent_oem_part_number like %s""",('%' + search_term + '%','%' + search_term + '%','%' + search_term + '%','%' + search_term + '%'),as_dict=1)
+
 	if not frappe.db.exists("Item Group", item_group):
 		item_group = get_root_of("Item Group")
 
-	condition = get_conditions(search_term,alt_items)
+	condition = get_conditions(search_term)
 	condition += get_item_group_condition(pos_profile)
 
 	lft, rgt = frappe.db.get_value("Item Group", item_group, ["lft", "rgt"])
 
-	bin_join_selection, bin_join_condition,bin_valuation_rate,bin_join_condition_valuation = "", "","",""
-	if not custom_skip_stock_transaction_validation:
-		if hide_unavailable_items:
-			bin_join_selection = ", `tabBin` bin"
-			bin_join_condition = (
-				"AND bin.warehouse = %(warehouse)s AND bin.item_code = item.name AND bin.actual_qty > 0"
-			)
-
-		if not bin_join_selection:
-			bin_join_selection = ", `tabBin` bin"
-		bin_valuation_rate = "bin.valuation_rate, bin.valuation_rate as custom_valuation_rate,"
-	
-		bin_join_condition_valuation = (
-			"AND bin.warehouse = %(warehouse)s AND bin.item_code = item.name"
+	bin_join_selection, bin_join_condition = "", ""
+	if hide_unavailable_items:
+		bin_join_selection = ", `tabBin` bin"
+		bin_join_condition = (
+			"AND bin.warehouse = %(warehouse)s AND bin.item_code = item.name AND bin.actual_qty > 0"
 		)
 
 	items_data = frappe.db.sql(
 		"""
 		SELECT
 			item.name AS item_code,
-			item.custom_oem_part_number,
 			item.item_name,
 			item.description,
 			item.stock_uom,
-			{bin_valuation_rate}
 			item.image AS item_image,
-			item.is_stock_item,
-			item.custom_is_promo
+			item.is_stock_item
 		FROM
 			`tabItem` item {bin_join_selection}
 		WHERE
@@ -158,7 +140,6 @@ def get_items(start, page_length, price_list, item_group, pos_profile, search_te
 			AND item.item_group in (SELECT name FROM `tabItem Group` WHERE lft >= {lft} AND rgt <= {rgt})
 			AND {condition}
 			{bin_join_condition}
-			{bin_join_condition_valuation}
 		ORDER BY
 			item.name asc
 		LIMIT
@@ -169,9 +150,7 @@ def get_items(start, page_length, price_list, item_group, pos_profile, search_te
 			rgt=cint(rgt),
 			condition=condition,
 			bin_join_selection=bin_join_selection,
-			bin_valuation_rate=bin_valuation_rate,
 			bin_join_condition=bin_join_condition,
-			bin_join_condition_valuation=bin_join_condition_valuation
 		),
 		{"warehouse": warehouse},
 		as_dict=1,
@@ -182,15 +161,11 @@ def get_items(start, page_length, price_list, item_group, pos_profile, search_te
 		return result
 
 	for item in items_data:
-		if custom_show_logical_rack:
-			rack = frappe.db.sql(""" SELECT * FROM `tabLogical Rack` WHERE item=%s and pos_profile=%s """,(item.item_code,pos_profile),as_dict=1)
-			if len(rack) > 0:
-				item['rack'] = rack[0].rack_id
-				item['custom_logical_rack'] = rack[0].rack_id
 		uoms = frappe.get_doc("Item", item.item_code).get("uoms", [])
-		item["custom_item_uoms"] = frappe.db.get_all("UOM Conversion Detail", {"parent": item.item_code}, ["uom"], pluck="uom")
+
 		item.actual_qty, _ = get_stock_availability(item.item_code, warehouse)
 		item.uom = item.stock_uom
+
 		item_price = frappe.get_all(
 			"Item Price",
 			fields=["price_list_rate", "currency", "uom", "batch_no"],
@@ -199,8 +174,6 @@ def get_items(start, page_length, price_list, item_group, pos_profile, search_te
 				"item_code": item.item_code,
 				"selling": True,
 			},
-			order_by="creation desc",
-			limit=1
 		)
 
 		if not item_price:
@@ -229,18 +202,11 @@ def search_for_serial_or_batch_or_barcode_number(search_value: str) -> Dict[str,
 	return scan_barcode(search_value)
 
 
-def get_conditions(search_term,new_items):
+def get_conditions(search_term):
 	condition = "("
-
-	condition += """(item.name like {search_term}
-		or item.item_name like {search_term} or item.description like {search_term} or item.custom_oem_part_number like {search_term}) """.format(
+	condition += """item.name like {search_term}
+		or item.item_name like {search_term}""".format(
 		search_term=frappe.db.escape("%" + search_term + "%")
-	)
-	if len(new_items) > 0:
-		for xx in new_items:
-			condition += """or (item.name like {xx}
-		or item.item_name like {xx}) """.format(
-		xx=frappe.db.escape("%" + xx.item + "%")
 	)
 	condition += add_search_fields_condition(search_term)
 	condition += ")"
@@ -327,62 +293,31 @@ def create_opening_voucher(pos_profile, company, balance_details):
 
 
 @frappe.whitelist()
-def get_past_order_list(search_term, status, pos_profile=None, limit=20):
-	# Changed to Sales Order for POSNext
-	fields = ["name", "grand_total", "currency", "customer", "transaction_date", "modified"]
-	order_list = []
-	
-	# Add custom_is_posnext filter to only show POS orders
-	base_filters = {"custom_is_posnext": 1}
-	
-	if pos_profile:
-		base_filters["pos_profile"] = pos_profile
+def get_past_order_list(search_term, status, limit=20):
+	fields = ["name", "grand_total", "currency", "customer", "posting_time", "posting_date"]
+	invoice_list = []
 
 	if search_term and status:
-		fltr1 = {**base_filters, "customer": ["like", "%{}%".format(search_term)], "status": status}
-		orders_by_customer = frappe.db.get_all(
-			"Sales Order",
-			filters=fltr1,
+		invoices_by_customer = frappe.db.get_all(
+			"POS Invoice",
+			filters={"customer": ["like", "%{}%".format(search_term)], "status": status},
 			fields=fields,
 			page_length=limit,
-			order_by="transaction_date desc, modified desc"
 		)
-		
-		fltr2 = {**base_filters, "name": ["like", "%{}%".format(search_term)], "status": status}
-		orders_by_name = frappe.db.get_all(
-			"Sales Order",
-			filters=fltr2,
+		invoices_by_name = frappe.db.get_all(
+			"POS Invoice",
+			filters={"name": ["like", "%{}%".format(search_term)], "status": status},
 			fields=fields,
 			page_length=limit,
-			order_by="transaction_date desc, modified desc"
 		)
 
-		order_list = orders_by_customer + orders_by_name
+		invoice_list = invoices_by_customer + invoices_by_name
 	elif status:
-		fltr = {**base_filters, "status": status}
-		order_list = frappe.db.get_all(
-			"Sales Order", 
-			filters=fltr, 
-			fields=fields, 
-			page_length=limit,
-			order_by="transaction_date desc, modified desc"
-		)
-	else:
-		# If no status specified, get all
-		order_list = frappe.db.get_all(
-			"Sales Order", 
-			filters=base_filters, 
-			fields=fields, 
-			page_length=limit,
-			order_by="transaction_date desc, modified desc"
+		invoice_list = frappe.db.get_all(
+			"POS Invoice", filters={"status": status}, fields=fields, page_length=limit
 		)
 
-	# Map transaction_date to posting_date and modified to posting_time for frontend compatibility
-	for order in order_list:
-		order['posting_date'] = order.get('transaction_date')
-		order['posting_time'] = get_datetime(order.get('modified')).strftime('%H:%M:%S')
-	
-	return order_list
+	return invoice_list
 
 
 @frappe.whitelist()
@@ -434,9 +369,7 @@ def get_pos_profile_data(pos_profile):
 	for row in pos_profile.customer_groups:
 		children = get_child_nodes("Customer Group", row.customer_group)
 		_customer_groups_with_children.extend(children)
-	for row in pos_profile.payments:
-		if row.default:
-			pos_profile['default_payment'] = row.mode_of_payment
+
 	pos_profile.customer_groups = _customer_groups_with_children
 	return pos_profile
 
@@ -475,37 +408,3 @@ def generate_pdf_and_save(docname, doctype, print_format=None):
 	print("FILE DOOOOC")
 	print(file_doc)
 	return file_doc
-
-@frappe.whitelist()
-def make_sales_return(source_name, target_doc=None):
-	from erpnext.controllers.sales_and_purchase_return import make_return_doc
-
-	return make_return_doc("Sales Invoice", source_name, target_doc)
-
-
-@frappe.whitelist()
-def get_lcr(customer=None, item_code=None):
-	d = None
-	if customer and item_code:
-		d = frappe.db.sql(f"""
-		SELECT item.rate FROM `tabSales Invoice Item` item INNER JOIN `tabSales Invoice` SI ON SI.name=item.parent
-		WHERE SI.customer='{customer}' AND item.item_code='{item_code}' 
-		ORDER BY SI.creation desc 
-		LIMIT 1
-		""", as_dict=True)
-	if d:
-		return d[0].rate
-	else:
-		return 0
-
-@frappe.whitelist()
-def get_uoms(item_code):
-	d = frappe.db.get_all("UOM Conversion Detail", {"parent": item_code}, ["uom"], pluck="uom")
-	if d:
-		return d
-	else:
-		return []
-	
-@frappe.whitelist()
-def get_barcodes(item_code):
-	return frappe.db.get_all("Item Barcode", filters={"parent": item_code}, fields=["barcode"])

@@ -1,11 +1,10 @@
 frappe.provide('posnext.PointOfSale');
 var invoicess = []
 posnext.PointOfSale.PastOrderList = class {
-	constructor({ wrapper, events, settings }) {
+	constructor({ wrapper, events }) {
 		this.wrapper = wrapper;
 		this.events = events;
-		this.pos_profile = settings.name
-		this.custom_filter_order_list_by_profile = settings.custom_filter_order_list_by_profile
+
 		this.init_component();
 	}
 
@@ -48,33 +47,10 @@ posnext.PointOfSale.PastOrderList = class {
 			}, 300);
 		});
 		const me = this;
-		this.$invoices_container.on('click', '.invoice-wrapper', function(e) {
-			// Don't trigger if clicking on the "Go to Order" button
-			if ($(e.target).hasClass('go-order-btn')) {
-				return;
-			}
+		this.$invoices_container.on('click', '.invoice-wrapper', function() {
 			const invoice_name = unescape($(this).attr('data-invoice-name'));
 			me.events.open_invoice_data(invoice_name);
 		});
-		
-		// Handle "Go to Order" button click
-		this.$invoices_container.on('click', '.go-order-btn', function(e) {
-			e.stopPropagation(); // Prevent invoice-wrapper click event
-			const order_name = unescape($(this).attr('data-order-name'));
-			
-			// Open Sales Order document in a new form
-			frappe.set_route('Form', 'Sales Order', order_name);
-		});
-		
-		// Add hover effect for Go to Order button
-		this.$invoices_container.on('mouseenter', '.go-order-btn', function() {
-			$(this).css('background-color', '#1976d2');
-		});
-		
-		this.$invoices_container.on('mouseleave', '.go-order-btn', function() {
-			$(this).css('background-color', '#2490ef');
-		});
-		
 		this.$component.on('click', '.back', function() {
 			me.events.previous_screen()
 		});
@@ -86,17 +62,17 @@ posnext.PointOfSale.PastOrderList = class {
 			df: {
 				label: __('Search'),
 				fieldtype: 'Data',
-				placeholder: __('Search by order id or customer name')
+				placeholder: __('Search by invoice id or customer name')
 			},
 			parent: this.$component.find('.search-field'),
 			render_input: true,
 		});
 		this.status_field = frappe.ui.form.make_control({
 			df: {
-				label: __('Order Status'),
+				label: __('Invoice Status'),
 				fieldtype: 'Select',
-				options: `Draft\nTo Deliver and Bill\nTo Bill\nTo Deliver\nCompleted\nCancelled\nClosed`,
-				placeholder: __('Filter by order status'),
+				options: `Draft\nPaid\nConsolidated\nReturn`,
+				placeholder: __('Filter by invoice status'),
 				onchange: function() {
 					if (me.$component.is(':visible')) me.refresh_list();
 				}
@@ -114,23 +90,19 @@ posnext.PointOfSale.PastOrderList = class {
 		this.events.reset_summary();
 		const search_term = this.search_field.get_value();
 		const status = this.status_field.get_value();
-		const pos_profile = this.pos_profile;
+
 		this.$invoices_container.html('');
-		let filter = { search_term, status };
-		if(this.custom_filter_order_list_by_profile){
-			filter = { search_term, status, pos_profile }
-		}
-		
+
 		return frappe.call({
-			method: "posnext.posnext.page.posnext.point_of_sale.get_past_order_list",
+			method: "erpnext.selling.page.point_of_sale.point_of_sale.get_past_order_list",
 			freeze: true,
-			args: filter,
+			args: { search_term, status },
 			callback: (response) => {
 				frappe.dom.unfreeze();
-				invoicess = response.message  // Keep variable name for compatibility
-				response.message.forEach(order => {
-					const order_html = this.get_invoice_html(order);  // Method name kept for compatibility
-					this.$invoices_container.append(order_html);
+				invoicess = response.message
+				response.message.forEach(invoice => {
+					const invoice_html = this.get_invoice_html(invoice);
+					this.$invoices_container.append(invoice_html);
 				});
 			}
 		});
@@ -153,20 +125,6 @@ posnext.PointOfSale.PastOrderList = class {
 				<div class="invoice-total-status">
 					<div class="invoice-total">${format_currency(invoice.grand_total, invoice.currency, 0) || 0}</div>
 					<div class="invoice-date">${posting_datetime}</div>
-				</div>
-				<div class="go-order-btn" data-order-name="${escape(invoice.name)}" style="
-					margin-top: 8px;
-					padding: 6px 12px;
-					background-color: #2490ef;
-					color: white;
-					text-align: center;
-					border-radius: 4px;
-					cursor: pointer;
-					font-size: 12px;
-					font-weight: 500;
-					transition: background-color 0.2s;
-				">
-					Go to Order
 				</div>
 			</div>
 			<div class="seperator"></div>`
