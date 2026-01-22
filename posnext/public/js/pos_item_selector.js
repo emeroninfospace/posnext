@@ -284,6 +284,8 @@ posnext.PointOfSale.ItemSelector = class {
 				// this.$items_container.append(item_html);
 			});
 		} else {
+			// Clear container for card view to prevent duplicates
+			this.$items_container.html('');
 			items.forEach(item => {
                 var item_html = this.get_item_html(item);
                 this.$items_container.append(item_html);
@@ -311,6 +313,11 @@ posnext.PointOfSale.ItemSelector = class {
 
 		const me = this;
 		const currency = me.events.get_frm().currency || me.currency;
+		// Check if item already exists to prevent duplicates
+		let $existing_item = this.get_cart_item1(item_data);
+		if ($existing_item && $existing_item.length > 0) {
+			return; // Item already exists, skip rendering
+		}
 		this.$cart_items_wrapper.append(
 			`<div class="cart-item-wrapper item-wrapper" 
 			data-item-code="${escape(item_data.item_code)}" 
@@ -861,6 +868,9 @@ posnext.PointOfSale.ItemSelector = class {
 				}
 				return;
 			}
+		} else {
+			// Clear search index when search term is empty
+			this.search_index = {};
 		}
 
 		this.get_items({ search_term })
