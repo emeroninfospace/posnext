@@ -423,7 +423,7 @@ posnext.PointOfSale.Controller = class {
 							this.order_summary.load_summary_of(this.frm.doc, true);
 							frappe.show_alert({
 								indicator: 'green',
-								message: __('POS invoice {0} created succesfully', [r.doc.name])
+								message: __('Sales invoice {0} created succesfully', [r.doc.name])
 							});
 						});
 				}
@@ -534,7 +534,7 @@ posnext.PointOfSale.Controller = class {
 	}
 
 	make_sales_invoice_frm() {
-		const doctype = 'POS Invoice';
+		const doctype = 'Sales Invoice';
 		return new Promise(resolve => {
 			if (this.frm) {
 				this.frm = this.get_new_frm(this.frm);
@@ -557,7 +557,7 @@ posnext.PointOfSale.Controller = class {
 	}
 
 	get_new_frm(_frm) {
-		const doctype = 'POS Invoice';
+		const doctype = 'Sales Invoice';
 		const page = $('<div>');
 		const frm = _frm || new frappe.ui.form.Form(doctype, page, false);
 		const name = frappe.model.make_new_doc_and_get_name(doctype, true);
