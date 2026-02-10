@@ -14,6 +14,14 @@ def validate_so(doc, method):
         return  # Skip for standalone Sales Orders
     
     doc.reserve_stock = 1
+
+    user = frappe.session.user
+    roles = frappe.get_roles(user)
+
+    restricted_roles = {"Sales User", "Pos User"}
+
+    if restricted_roles.intersection(set(roles)):
+        validate_minimum_item_rate(doc)
     
     if doc.get('pos_profile'):
         doc.delivery_date = add_days(nowdate(), 2)
@@ -131,3 +139,33 @@ def get_sales_person_for_user():
     """Get Sales Person for current user"""
     current_user = frappe.session.user
     return frappe.db.get_value("Sales Person", {"custom_user": current_user}, "name")
+
+
+def validate_minimum_item_rate(doc):
+    for row in doc.items:
+        print(row.item_code)
+        if not row.item_code:
+            continue
+
+        minimum_rate = frappe.db.get_value(
+            "Item",
+            row.item_code,
+            "custom_minimum_rate"
+        )
+
+        if not minimum_rate:
+            continue
+
+        if row.rate < minimum_rate:
+            frappe.throw(
+                _(
+                    "Row {0}: Rate for item <b>{1}</b> cannot be less than "
+                    "<b>{2}</b>.<br>Entered rate: <b>{3}</b>"
+                ).format(
+                    row.idx,
+                    row.item_code,
+                    frappe.format(minimum_rate),
+                    frappe.format(row.rate),
+                ),
+                title=_("Minimum Rate Restriction")
+            )
