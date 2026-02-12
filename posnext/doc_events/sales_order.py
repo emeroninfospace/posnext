@@ -148,8 +148,8 @@ def validate_minimum_item_rate(doc):
             continue
 
         minimum_rate = frappe.db.get_value(
-            "Item",
-            row.item_code,
+            "Item Price",
+            {"item_code": row.item_code},
             "custom_minimum_rate"
         )
 
@@ -170,11 +170,18 @@ def validate_minimum_item_rate(doc):
                 title=_("Minimum Rate Restriction")
             )
 
-
 def on_update_so(doc, method):
     for item in doc.items:
-        min_rate = frappe.db.get_value("Item", item.item_code, "custom_minimum_rate")
-        if min_rate and item.rate < min_rate:
+        min_rate = frappe.db.get_value(
+            "Item Price",
+            {"item_code": item.item_code},
+            "custom_minimum_rate"
+        )
+
+        min_rate = flt(min_rate)
+        rate = flt(item.rate)
+
+        if min_rate and rate < min_rate:
             frappe.throw(
                 _(
                     "Row {0}: Rate for item <b>{1}</b> cannot be less than "
@@ -183,10 +190,7 @@ def on_update_so(doc, method):
                     item.idx,
                     item.item_code,
                     frappe.format(min_rate),
-                    frappe.format(item.rate),
+                    frappe.format(rate),
                 ),
                 title=_("Minimum Rate Restriction")
             )
-       
-
-    
