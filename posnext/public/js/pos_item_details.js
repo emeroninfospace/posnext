@@ -289,12 +289,20 @@ posnext.PointOfSale.ItemDetails = class {
 		}
 
 		if (this.uom_control) {
-			this.uom_control.df.onchange = function() {
-				me.events.form_updated(me.current_item, 'uom', this.value);
+			this.uom_control.df.onchange = async function() {
+				const selected_uom = this.value;
+				await me.events.form_updated(me.current_item, 'uom', selected_uom);
 
 				const item_row = frappe.get_doc(me.doctype, me.name);
-				me.conversion_factor_control.df.read_only = (item_row.stock_uom == this.value);
+				me.conversion_factor_control.df.read_only = (item_row.stock_uom == selected_uom);
+				me.conversion_factor_control.set_value(item_row.conversion_factor);
 				me.conversion_factor_control.refresh();
+				if (me.rate_control) {
+					me.rate_control.set_value(item_row.rate);
+					me.$item_price.html(format_currency(item_row.rate, me.currency));
+					me.render_discount_dom(item_row);
+				}
+				me.price_list_rate_control && me.price_list_rate_control.set_value(item_row.price_list_rate);
 			}
 		}
 
