@@ -241,14 +241,19 @@ doctype_js = {"POS Profile" : "public/js/pos_profile.js"}
 
 
 fixtures = [
-	{
-		"doctype":"Custom Field",
-		"filters": [
-			[
-				"module",
-				"in",
-				["Posnext"]
+    {
+        "doctype": "Custom Field",
+        "filters": [
+            [
+                "module",
+                "in",
+                ["Posnext"]
+            ],
+            [
+                "name",
+                "in",
+                ["POS Profile-custom_item_price_list"]
             ]
         ]
-	},
+    }
 ]
