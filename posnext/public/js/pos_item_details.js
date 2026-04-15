@@ -6,6 +6,7 @@ posnext.PointOfSale.ItemDetails = class {
 		this.hide_images = settings.hide_images;
 		this.allow_rate_change = settings.allow_rate_change;
 		this.allow_discount_change = settings.allow_discount_change;
+		this.allow_item_price_list = settings.custom_item_price_list || false;
 		this.current_item = {};
 
 		this.init_component();
@@ -165,6 +166,18 @@ posnext.PointOfSale.ItemDetails = class {
 		const fields_to_display = this.get_form_fields(item);
 		this.$form_container.html('');
 
+		// Remove previous price list wrapper if any, then re-render
+		if (this.$price_list_wrapper) {
+			this.$price_list_wrapper.remove();
+			this.$price_list_wrapper = null;
+			this.price_list_control = null;
+		}
+
+		// Render Price List selector above the form fields (only if enabled in POS Profile)
+		if (this.allow_item_price_list) {
+			this.render_price_list_control(item);
+		}
+
 		fields_to_display.forEach((fieldname, idx) => {
 			this.$form_container.append(
 				`<div class="${fieldname}-control" data-fieldname="${fieldname}"></div>`
@@ -197,6 +210,92 @@ posnext.PointOfSale.ItemDetails = class {
 		if (item.has_serial_no) fields.push('serial_no');
 		if (item.has_batch_no) fields.push('batch_no');
 		return fields;
+	}
+
+	render_price_list_control(item) {
+		// Add Price List selector field at the top of the form
+		if (this.price_list_control) {
+			this.price_list_control.set_value(
+				this.events.get_frm().doc.selling_price_list || ''
+			);
+			return;
+		}
+
+		const me = this;
+		const $wrapper = $(
+			`<div class="price-list-control form-group" style="margin-bottom:10px;">
+				<label class="control-label" style="font-size:11px;font-weight:600;color:#6c7680;">${__('Price List')}</label>
+				<div class="price-list-input"></div>
+			</div>`
+		);
+		// Prepend before the form fields
+		this.$form_container.before($wrapper);
+		this.$price_list_wrapper = $wrapper;
+
+		this.price_list_control = frappe.ui.form.make_control({
+			df: {
+				fieldname: 'price_list_selector',
+				fieldtype: 'Link',
+				options: 'Price List',
+				label: __('Price List'),
+				filters: { selling: 1 },
+				onchange: function() {
+					const selected_price_list = this.value;
+					if (!selected_price_list || !me.item_row) return;
+
+					// Fetch item price for selected price list
+					frappe.db.get_list('Item Price', {
+						fields: ['price_list_rate', 'uom', 'currency'],
+						filters: {
+							item_code: me.item_row.item_code,
+							price_list: selected_price_list,
+							selling: 1,
+						},
+						order_by: 'modified desc',
+						limit: 10,
+					}).then(prices => {
+						if (!prices || !prices.length) {
+							frappe.show_alert({
+								message: __('No price found for this item in the selected price list.'),
+								indicator: 'orange'
+							});
+							return;
+						}
+
+						// Prefer exact UOM match, fallback to first
+						const match = prices.find(p => p.uom === me.item_row.uom)
+							|| prices.find(p => p.uom === me.item_row.stock_uom)
+							|| prices[0];
+
+						const new_rate = flt(match.price_list_rate);
+
+						// Update price_list_rate on item row
+						me.events.form_updated(me.current_item, 'price_list_rate', new_rate).then(() => {
+							// Also update rate to match new price list rate
+							me.events.form_updated(me.current_item, 'rate', new_rate).then(() => {
+								const item_row = frappe.get_doc(me.doctype, me.name);
+								const doc = me.events.get_frm().doc;
+								// Refresh displayed price
+								me.$item_price.html(format_currency(new_rate, doc.currency));
+								me.render_discount_dom(item_row);
+								// Refresh controls to show updated values
+								me.rate_control && me.rate_control.set_value(new_rate);
+								me.price_list_rate_control && me.price_list_rate_control.set_value(new_rate);
+								
+							});
+						});
+					});
+				}
+			},
+			parent: $wrapper.find('.price-list-input'),
+			render_input: true,
+		});
+
+		// Set default to current selling price list
+		const current_price_list = this.events.get_frm().doc.selling_price_list;
+		if (current_price_list) {
+			this.price_list_control.set_value(current_price_list);
+		}
 	}
 
 	make_auto_serial_selection_btn(item) {
