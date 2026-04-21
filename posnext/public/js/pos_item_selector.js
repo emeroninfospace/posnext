@@ -671,35 +671,73 @@ posnext.PointOfSale.ItemSelector = class {
 	update_vat_on_sales_order() {
 		const me = this;
 		const frm = me.events.get_frm();
-		if (!frm || !frm.doc) return;
-
-		if (window.cur_pos) {
-			window.cur_pos.item_selector = me;
+		if (!frm?.doc) return;
+	
+		if (window.cur_pos) window.cur_pos.item_selector = me;
+	
+		if (['POS Invoice', 'Sales Invoice'].includes(frm.doc.doctype)) {
+			if (frappe.meta.has_field(frm.doc.doctype, 'custom_type')) {
+				frm.set_value('custom_type', me.vat_type);
+			}
 		}
-
-		// Set custom_type field in sales order
-		if (frm.doc && frm.doc.doctype === 'POS Invoice') {
-			frm.set_value('custom_type', me.vat_type);
-		}
-
+	
 		if (me.vat_type === 'Tax') {
 			if (frm.doc.pos_profile) {
-				frappe.db.get_doc('POS Profile', frm.doc.pos_profile).then(pos_profile => {
-					if (pos_profile.taxes_and_charges) {
-						frm.set_value('taxes_and_charges', pos_profile.taxes_and_charges);
-						frm.trigger('taxes_and_charges');
-					}
-				});
+				frappe.db.get_value('POS Profile', frm.doc.pos_profile, 'taxes_and_charges')
+					.then(({ message }) => {
+						if (message?.taxes_and_charges) {
+							frm.set_value('taxes_and_charges', message.taxes_and_charges);
+							frm.trigger('taxes_and_charges');
+						}
+					});
 			}
 		} else if (me.vat_type === 'Without Tax') {
-			// Remove VAT - clear taxes_and_charges
-			frm.set_value('taxes_and_charges', '');
+			me.apply_without_tax_template(frm);
+		}
+	}
+	
+	async apply_without_tax_template(frm) {
+		const template_name = await this.get_zero_rate_taxes_template(frm.doc.company);
+	
+		if (template_name) {
+			await frm.set_value('taxes_and_charges', template_name);
+		} else {
+			await frm.set_value('taxes_and_charges', '');
 			frm.clear_table('taxes');
 			frm.refresh_field('taxes');
-			if (frm.cscript && frm.cscript.calculate_taxes_and_totals) {
-				frm.cscript.calculate_taxes_and_totals();
-			}
+			frm.cscript?.calculate_taxes_and_totals?.();
 		}
+	
+		frm.trigger('taxes_and_charges');
+	}
+	
+	async get_zero_rate_taxes_template(company) {
+		this._zero_rate_template_by_company ??= {};
+		const cache_key = company || '__any__';
+	
+		if (cache_key in this._zero_rate_template_by_company) {
+			return this._zero_rate_template_by_company[cache_key];
+		}
+	
+		try {
+			const templates = await frappe.db.get_list('Sales Taxes and Charges Template', {
+				filters: company ? { company } : {},
+				fields: ['name'],
+				limit: 100,
+			});
+	
+			for (const { name } of templates) {
+				const doc = await frappe.db.get_doc('Sales Taxes and Charges Template', name);
+				const taxes = doc?.taxes || [];
+	
+				if (taxes.length && taxes.every(r => flt(r.rate) === 0)) {
+					return (this._zero_rate_template_by_company[cache_key] = name);
+				}
+			}
+		} catch {
+		}
+	
+		return (this._zero_rate_template_by_company[cache_key] = null);
 	}
 
 	attach_clear_btn() {
