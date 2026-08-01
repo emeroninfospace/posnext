@@ -7,6 +7,7 @@ posnext.PointOfSale.ItemDetails = class {
 		this.allow_rate_change = settings.allow_rate_change;
 		this.allow_discount_change = settings.allow_discount_change;
 		this.custom_edit_rate_and_uom = settings.custom_edit_rate_and_uom;
+		this.custom_show_discount_amount_in_details = settings.custom_show_discount_amount_in_details;
 		this.current_item = {};
 
 		this.init_component();
@@ -154,10 +155,15 @@ posnext.PointOfSale.ItemDetails = class {
 
 	render_discount_dom(item) {
 		if (item.discount_percentage) {
-			this.$dicount_section.html(
-				`<div class="item-rate">${format_currency(item.price_list_rate, this.currency)}</div>
-				<div class="item-discount">${item.discount_percentage}% off</div>`
-			)
+			let html = `<div class="item-rate">${format_currency(item.price_list_rate, this.currency)}</div>
+				<div class="item-discount">${item.discount_percentage}% off</div>`;
+			if (this.custom_show_discount_amount_in_details) {
+				const discount_amount = flt(item.price_list_rate) - flt(item.rate);
+				if (discount_amount > 0) {
+					html += `<div class="item-discount-amount">${format_currency(discount_amount, this.currency)} off</div>`;
+				}
+			}
+			this.$dicount_section.html(html);
 			this.$item_price.html(format_currency(item.rate, this.currency));
 		} else {
 			this.$dicount_section.html(``)
@@ -209,7 +215,9 @@ posnext.PointOfSale.ItemDetails = class {
 	}
 
 	get_form_fields(item) {
-		const fields = ['qty', 'uom', 'rate', 'conversion_factor', 'discount_percentage', 'warehouse', 'actual_qty', 'price_list_rate'];
+		const fields = ['qty', 'uom', 'rate', 'conversion_factor', 'discount_percentage'];
+		if (this.custom_show_discount_amount_in_details) fields.push('discount_amount');
+		fields.push('warehouse', 'actual_qty', 'price_list_rate');
 		if (item.has_serial_no) fields.push('serial_no');
 		if (item.has_batch_no) fields.push('batch_no');
 		return fields;
@@ -245,6 +253,11 @@ posnext.PointOfSale.ItemDetails = class {
 		if (this.discount_percentage_control && !this.allow_discount_change) {
 			this.discount_percentage_control.df.read_only = 1;
 			this.discount_percentage_control.refresh();
+		}
+
+		if (this.discount_amount_control && !this.allow_discount_change) {
+			this.discount_amount_control.df.read_only = 1;
+			this.discount_amount_control.refresh();
 		}
 
 		if (this.warehouse_control) {
