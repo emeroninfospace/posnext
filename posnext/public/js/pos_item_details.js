@@ -18,6 +18,12 @@ posnext.PointOfSale.ItemDetails = class {
 		this.init_child_components();
 		this.bind_events();
 		this.attach_shortcuts();
+		frappe.call({
+			method: 'abitos.api.get_abitos_settings',
+			callback: (r) => {
+				this.max_discount_percentage = flt(r.message && r.message.maximum_discount_percentage) || 0;
+			}
+		});
 	}
 
 	prepare_dom() {
@@ -250,13 +256,48 @@ posnext.PointOfSale.ItemDetails = class {
 			this.rate_control.refresh();
 		}
 
-		if (this.discount_percentage_control && !this.allow_discount_change) {
-			this.discount_percentage_control.df.read_only = 1;
+		if (this.discount_percentage_control) {
+			if (!this.allow_discount_change) {
+				this.discount_percentage_control.df.read_only = 1;
+			} else {
+				this.discount_percentage_control.df.onchange = function() {
+					const max = me.max_discount_percentage;
+					if (max > 0 && flt(this.value) > max) {
+						frappe.show_alert({
+							message: __('Max discount allowed is {0}%.', [max]),
+							indicator: 'red'
+						});
+						me.discount_percentage_control.set_value(max);
+						return;
+					}
+					me.events.form_updated(me.current_item, 'discount_percentage', this.value);
+				};
+			}
 			this.discount_percentage_control.refresh();
 		}
 
-		if (this.discount_amount_control && !this.allow_discount_change) {
-			this.discount_amount_control.df.read_only = 1;
+		if (this.discount_amount_control) {
+			if (!this.allow_discount_change) {
+				this.discount_amount_control.df.read_only = 1;
+			} else {
+				this.discount_amount_control.df.onchange = function() {
+					const item_row = frappe.get_doc(me.doctype, me.name);
+					const price_list_rate = flt(item_row.price_list_rate);
+					const max = me.max_discount_percentage;
+					if (max > 0 && price_list_rate > 0) {
+						const max_discount_amount = price_list_rate * max / 100;
+						if (flt(this.value) > max_discount_amount) {
+							frappe.show_alert({
+								message: __('Max discount allowed is {0} ({1}% of price list rate).', [format_currency(max_discount_amount, me.currency), max]),
+								indicator: 'red'
+							});
+							me.discount_amount_control.set_value(flt(max_discount_amount.toFixed(2)));
+							return;
+						}
+					}
+					me.events.form_updated(me.current_item, 'discount_amount', this.value);
+				};
+			}
 			this.discount_amount_control.refresh();
 		}
 
