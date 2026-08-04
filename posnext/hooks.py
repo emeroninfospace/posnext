@@ -144,7 +144,7 @@ doc_events = {
 		"validate": "posnext.doc_events.item.validate_item"
 	},
     "Sales Order": {
-        "validate": "posnext.doc_events.sales_order.validate_so",
+        # "validate": "posnext.doc_events.sales_order.validate_so",
         "on_update_after_submit": "posnext.doc_events.sales_order.on_update_so",
         "on_submit": "posnext.doc_events.sales_order.on_submit_so"
     },
