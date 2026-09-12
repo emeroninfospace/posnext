@@ -689,19 +689,37 @@ posnext.PointOfSale.Controller = class {
 					});
 				},
 				edit_order: (name) => {
-					console.log("Edit Order...")
 					this.recent_order_list.toggle_component(false);
-					frappe.run_serially([
-						() => this.frm.refresh(name),
-						() => this.frm.call('reset_mode_of_payments'),
-						() => this.cart.load_invoice(),
-						() => this.item_selector.toggle_component(true)
-					]);
+					this.order_summary.toggle_component(false);
+					frappe.dom.freeze();
+					frappe.model.with_doc('Sales Order', name, () => {
+						// Set frm fields directly — avoids frm.refresh() which
+						// triggers a full Frappe form render (sidebar/AssignTo)
+						// that fails in the POS context and breaks the load.
+						this.frm.docname = name;
+						this.frm.doc = frappe.get_doc('Sales Order', name);
+						frappe.run_serially([
+							() => this.cart.load_invoice(),
+							() => this.item_selector.toggle_component(true),
+						]).finally(() => frappe.dom.unfreeze());
+					});
 				},
 				delete_order: (name) => {
-					frappe.model.delete_doc(this.frm.doc.doctype, name, () => {
-						this.recent_order_list.refresh_list();
-					});
+					frappe.confirm(
+						__('Are you sure you want to delete this order?'),
+						() => {
+							frappe.call({
+								method: 'frappe.client.delete',
+								args: { doctype: 'Sales Order', name: name },
+								freeze: true,
+								callback: () => {
+									frappe.show_alert({ message: __('Order deleted successfully'), indicator: 'green' });
+									this.recent_order_list.refresh_list();
+									this.order_summary.toggle_summary_placeholder(true);
+								}
+							});
+						}
+					);
 				},
 				new_order: () => {
 					frappe.run_serially([
@@ -743,7 +761,7 @@ posnext.PointOfSale.Controller = class {
 					// UI reset: ensure only first step is visible
 					this.item_selector.toggle_component(true);
 					this.payment.toggle_component(false);
-					this.ordersummary.toggle_component(false);
+					this.order_summary.toggle_component(false);
 					this.item_details.toggle_component(false);
 				} catch (err) {
 					// Console log for debugging

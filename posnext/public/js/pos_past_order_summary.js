@@ -176,7 +176,7 @@ posnext.PointOfSale.PastOrderSummary = class {
 
         this.$summary_container.on('click', '.delete-btn', () => {
             this.events.delete_order(this.doc.name);
-            this.show_summary_placeholder();
+            this.toggle_summary_placeholder(true);
         });
 
         this.$summary_container.on('click', '.send-btn', () => {
@@ -442,6 +442,7 @@ posnext.PointOfSale.PastOrderSummary = class {
 
 	attach_payments_info(doc) {
 		this.$payment_container.html('');
+		if (!doc.payments || !doc.payments.length) return;
 		doc.payments.forEach(p => {
 			if (p.amount) {
 				const payment_dom = this.get_payment_html(doc, p);
