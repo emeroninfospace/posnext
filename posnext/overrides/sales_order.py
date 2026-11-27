@@ -11,13 +11,29 @@ class PosnextSalesOrder(SalesOrder):
     """Custom Sales Order class for POSNext POS"""
     
     def validate(self):
+        self.set_reserve_stock_for_pos()
         super().validate()
-        
+
         # Only validate POS-specific fields if this is a POSNext order
         if self.get('custom_is_posnext'):
             self.validate_pos_profile()
             self.validate_pos_user()
     
+    def set_reserve_stock_for_pos(self):
+        """Reserve stock on submit for POSNext orders.
+
+        ERPNext v15 has no setting that ticks "Reserve Stock" on a Sales Order
+        automatically, so POSNext sets it here. Only done while Stock
+        Reservation is enabled in Stock Settings, because ERPNext refuses to
+        submit an order with "Reserve Stock" ticked when it is disabled.
+        Non-stock items are skipped by ERPNext itself.
+        """
+        if not self.get('custom_is_posnext'):
+            return
+
+        if frappe.db.get_single_value("Stock Settings", "enable_stock_reservation"):
+            self.reserve_stock = 1
+
     def validate_pos_profile(self):
         """Validate POS Profile if this is a POS order"""
         if not self.get('pos_profile'):
